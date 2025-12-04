@@ -1,38 +1,35 @@
-# Challenge 1
+# ✨🃏🧠✨ Vibemoji
 
-The guidelines for this mysterious challenge will be revealed when Round 1 opens.
+A memory card matching game with an emoji-only UI built for the Chainguard Vibelympics challenge!
 
-[README.md](https://github.com/user-attachments/files/23859006/README.md)
-# Challenge 1: App with Emoji-Only UI
+<img src="vibemoji.png" alt="Vibemoji">
 
-<img src="../assets/emojis.png" width="700" alt="Emojis">
+## Running Locally with Docker
 
-## Themes
-- Build with Chainguard Containers
-- Get weird
+### Prerequisites
 
-## The Challenge
-Build a fully functional application where the entire user interface uses ONLY emojis. No text allowed in any interactive elements - buttons, navigation, labels, everything must be emojis. Extra points if, like, everything is emojis.
+- Docker installed and running
 
-## Requirements
-- All UI elements must be emojis only (no text in the interface)
-- Ideally the app will actually do something
-- Must be containerized using Chainguard Containers. You can set it up with a Dockerfile and we'll build and run locally. If it's a web app, it should able to be run on some port and be seen locally. If it's a CLI app, we'll run the default entrypoint and go from there. Feel free to give us directions in the README (replace this file).
+### Build and Run
 
-## Dumb Ideas
+```bash
+# Build the image
+docker build -t emoji-memory-game .
 
-Stuck? Here are some derivative ideas!
+# Run the container
+docker run -p 8080:8080 emoji-memory-game
+```
 
-- Calculator (🔢 ➕ ➖ ✖️ ➗)
-- To Do app (✅ ❌ 📝 🗑️)
-- Weather app (☀️ 🌧️ ❄️ 🌡️)
-- Music player (▶️ ⏸️ ⏭️ 🔀 🔁)
-- Mini game (🎮)
-- Demonic energy detector (😈)
-- Beanie baby collection database / sorter (🐢🧸, topical!)
+Then navigate to **http://localhost:8080** to play the game.
 
-## Submission
-To submit, simply replace the contents of this folder (round_1) with the code for your project. Make sure to replace this README.md with instructions on getting your project running. Also make sure your vibelympics repository is public and that you've pushed all the code you want us to see. We will pull in your submission directly from your repository.
+### Note
 
-## Deadline
-December 4, 11:59 PM EST
+You may see this warning in the container logs (it's expected and harmless per Chainguard docs):
+
+```
+nginx: [warn] the "user" directive makes sense only if the master process runs with super-user privileges...
+```
+
+### Note Note
+
+Debug mode 🐞 is on by default. Clicking the 🐞 button in the game will automatically complete the current level. Make sure to check out the final level (Level 7) for a fun surprise!

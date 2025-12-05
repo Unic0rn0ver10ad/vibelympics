@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vibanalyz"
+version = "0.1.0"
+description = "Package security auditing tool - MVP stub"
+requires-python = ">=3.11"
+dependencies = [
+    "textual>=0.40.0",
+    "reportlab>=4.0.0",
+]
+
+[project.scripts]
+vibanalyz = "vibanalyz.cli:main"
+
+[tool.hatchling.build]
+source-dir = "src"
+

@@ -1,9 +1,9 @@
-"""Task to fetch PyPI metadata."""
+"""Task to fetch NPM metadata."""
 
-from vibanalyz.adapters.pypi_client import (
+from vibanalyz.adapters.npm_client import (
     NetworkError,
     PackageNotFoundError,
-    PyPIError,
+    NPMError,
     fetch_package_metadata,
 )
 from vibanalyz.domain.exceptions import PipelineFatalError
@@ -12,22 +12,22 @@ from vibanalyz.domain.protocols import Task
 from vibanalyz.services.tasks import register
 
 
-class FetchPyPi:
-    """Task to fetch package metadata from PyPI."""
+class FetchNpm:
+    """Task to fetch package metadata from NPM."""
 
-    name = "fetch_pypi"
+    name = "fetch_npm"
 
     def get_status_message(self, ctx: Context) -> str:
         """Generate status message for this task."""
-        return f"Contacting PyPI repo for {ctx.package_name} module."
+        return f"Contacting NPM repo for {ctx.package_name} module."
 
     def run(self, ctx: Context) -> Context:
-        """Fetch PyPI metadata and update context."""
+        """Fetch NPM metadata and update context."""
         # Log start of fetch operation
         if ctx.log_display:
             version_info = f"=={ctx.requested_version}" if ctx.requested_version else ""
             ctx.log_display.write(f"[{self.name}] Starting fetch for {ctx.package_name}{version_info}")
-            ctx.log_display.write(f"[{self.name}] Connecting to PyPI API...")
+            ctx.log_display.write(f"[{self.name}] Connecting to NPM Registry API...")
         
         try:
             # Fetch package metadata
@@ -65,7 +65,7 @@ class FetchPyPi:
             )
             # Raise fatal error to stop pipeline
             raise PipelineFatalError(
-                message=f"Package '{ctx.package_name}' not found on PyPI",
+                message=f"Package '{ctx.package_name}' not found on NPM",
                 source=self.name
             )
         except NetworkError as e:
@@ -80,15 +80,15 @@ class FetchPyPi:
                     severity="warning",
                 )
             )
-        except PyPIError as e:
-            # Other PyPI errors
+        except NPMError as e:
+            # Other NPM errors
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: PyPI API error: {str(e)}")
+                ctx.log_display.write(f"[{self.name}] ERROR: NPM API error: {str(e)}")
             
             ctx.findings.append(
                 Finding(
                     source=self.name,
-                    message=f"PyPI error: {str(e)}",
+                    message=f"NPM error: {str(e)}",
                     severity="warning",
                 )
             )
@@ -97,5 +97,4 @@ class FetchPyPi:
 
 
 # Auto-register this task
-register(FetchPyPi())
-
+register(FetchNpm())

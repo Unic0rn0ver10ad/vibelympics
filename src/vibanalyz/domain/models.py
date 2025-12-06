@@ -1,7 +1,11 @@
 """Domain models for package auditing."""
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from vibanalyz.app.components.log_display import LogDisplay
+    from vibanalyz.app.components.status_bar import StatusBar
 
 
 @dataclass
@@ -57,11 +61,14 @@ class Context:
 
     package_name: str
     requested_version: Optional[str] = None
+    repo_source: Optional[str] = None
     package: Optional[PackageMetadata] = None
     repo: Optional[RepoInfo] = None
     sbom: Optional[Sbom] = None
     vulns: Optional[VulnReport] = None
     findings: list[Finding] = field(default_factory=list)
+    log_display: Optional["LogDisplay"] = None
+    status_bar: Optional["StatusBar"] = None
 
 
 @dataclass

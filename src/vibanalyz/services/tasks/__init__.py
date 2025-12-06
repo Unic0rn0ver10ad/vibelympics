@@ -1,2 +1,27 @@
 """Pipeline tasks."""
 
+from typing import Dict, List, Optional
+
+from vibanalyz.domain.protocols import Task
+
+_TASKS: Dict[str, Task] = {}
+
+
+def register(task: Task) -> None:
+    """Register a task by name."""
+    _TASKS[task.name] = task
+
+
+def get_task(name: str) -> Optional[Task]:
+    """Retrieve a task by name."""
+    return _TASKS.get(name)
+
+
+def all_tasks() -> List[Task]:
+    """Get all registered tasks."""
+    return list(_TASKS.values())
+
+
+# Import all task modules to trigger auto-registration
+from vibanalyz.services.tasks import fetch_npm, fetch_pypi, run_analyses  # noqa: E402, F401
+

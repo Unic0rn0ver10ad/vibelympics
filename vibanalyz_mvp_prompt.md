@@ -1,40 +1,45 @@
-# vibanalyz – MVP Stub Generator Prompt
+# vibanalyz – Architecture Reference
 
-You are an AI coding assistant. Your task is to generate a **minimal but fully wired MVP** for a Python CLI/TUI application called **`vibanalyz`**.
+This document describes the current architecture of **`vibanalyz`**, a Python CLI/TUI application for auditing software packages from multiple repository sources (PyPI, NPM).
 
-The goal of this MVP is:
-- The project can be installed and run locally.
-- The project can be built into a **single container image** using the **latest Chainguard Python** base image (free edition).
-- Running the container launches a **Textual** TUI/CLI that:
-  - Accepts an optional package name as a CLI argument.
-  - If provided, auto-runs a stub “audit” for that package.
-  - If not provided, shows an input field in the TUI to type a package name and run the stub audit.
-- The internal architecture is modular and ready to be extended, but **all logic is stubbed** (no real network calls, SBOM generation, etc.).
+## Overview
 
-The app will eventually audit software packages (PyPI, etc.), run Trivy and Grype, and combine multiple sources into a security report — but in this MVP, everything is fake/stubbed. The main goal is to prove plumbing and structure.
+The application:
+- Can be installed and run locally via `pip install .`
+- Can be built into a **single container image** using the **Chainguard Python** base image
+- Launches a **Textual** TUI that:
+  - Accepts an optional package name as a CLI argument
+  - Allows selecting the repository source (PyPI or NPM)
+  - Fetches real package metadata from the selected registry
+  - Runs security analyses and generates findings
+  - Produces a PDF audit report
 
 ---
 
 ## Requirements
 
 1. **Project name & packaging**
-   - Python package name: `vibanalyz`.
-   - Use `pyproject.toml` with `hatchling` (or another simple backend) for packaging.
-   - Use `src/` layout.
-   - Provide a console script entrypoint named `vibanalyz`.
+   - Python package name: `vibanalyz`
+   - Uses `pyproject.toml` with `hatchling` backend
+   - Uses `src/` layout
+   - Console script entrypoint: `vibanalyz`
 
 2. **Dependencies**
-   - Python version: `>=3.11`.
-   - Include `textual` as a primary external dependency for the TUI.
-   - Include `reportlab` as the PDF generation library (for now, use it to create a simple stub/template PDF report).
+   - Python version: `>=3.11`
+   - `textual` – TUI framework
+   - `reportlab` – PDF generation
+   - `requests` – HTTP client for registry APIs
 
-3. **High-level architecture**
+---
 
-Create the following directory structure:
+## Directory Structure
 
 ```text
 vibanalyz/
   pyproject.toml
+  Dockerfile
+  architecture_notes.md      # TUI architecture guide
+  vibanalyz_mvp_prompt.md    # This file
   src/
     vibanalyz/
       __init__.py
@@ -42,204 +47,309 @@ vibanalyz/
 
       app/
         __init__.py
-        main.py
+        main.py              # Main Textual app (orchestrator)
+        state.py             # Application state management
+        actions/
+          __init__.py
+          audit_action.py    # Audit execution action handler
+        components/
+          __init__.py
+          input_section.py   # Package input component
+          log_display.py     # Log output component
+          status_bar.py      # Status bar component
 
       domain/
         __init__.py
-        models.py
-        protocols.py
-        scoring.py
+        models.py            # Core data models
+        protocols.py         # Task and Analyzer protocols
+        scoring.py           # Risk score computation
+        exceptions.py        # Pipeline exceptions
 
       services/
         __init__.py
-        pipeline.py
-        reporting.py
+        pipeline.py          # Pipeline orchestrator with chain support
+        reporting.py         # PDF report generation
         tasks/
-          __init__.py
-          fetch_pypi.py
-          run_analyses.py
+          __init__.py        # Task registry
+          fetch_pypi.py      # PyPI metadata fetch task
+          fetch_npm.py       # NPM metadata fetch task
+          run_analyses.py    # Run all analyzers task
 
       analyzers/
-        __init__.py
-        metadata.py
+        __init__.py          # Analyzer registry
+        metadata.py          # Metadata analyzer
 
       adapters/
         __init__.py
-        pypi_client.py
+        pypi_client.py       # PyPI registry HTTP client
+        npm_client.py        # NPM registry HTTP client
 ```
-
-All logic should be stubbed, but the relationships should be realistic and future-proof.
 
 ---
 
-## Domain layer (data models & protocols)
+## Domain Layer
 
 ### `domain/models.py`
 
-Define simple dataclasses to represent core concepts:
+Core dataclasses representing domain concepts:
 
-- `PackageMetadata` – name, optional version, optional summary.
-- `RepoInfo` – URL (optional). (Will be used later.)
-- `Sbom` – holds `raw: dict | None` (placeholder for Trivy output).
-- `VulnReport` – holds `raw: dict | None` (placeholder for Grype output).
-- `Finding` – fields:
-  - `source: str`
-  - `message: str`
-  - `severity: str` (`"info" | "low" | "medium" | "high" | "critical"`)
-- `Context` – shared data passed through tasks and analyzers:
-  - `package_name: str`
-  - `requested_version: str | None`
-  - `package: PackageMetadata | None`
-  - `repo: RepoInfo | None`
-  - `sbom: Sbom | None`
-  - `vulns: VulnReport | None`
-  - `findings: list[Finding]`
-- `AuditResult` – final result of pipeline:
-  - `ctx: Context`
-  - `score: int`
+**`PackageMetadata`** – Package information from registries:
+- `name: str`
+- `version: Optional[str]`
+- `summary: Optional[str]`
+- `maintainers: Optional[list[str]]`
+- `home_page: Optional[str]`
+- `project_urls: Optional[dict[str, str]]`
+- `requires_dist: Optional[list[str]]`
+- `author: Optional[str]`
+- `author_email: Optional[str]`
+- `license: Optional[str]`
+- `release_count: Optional[int]`
+
+**`RepoInfo`** – Repository information:
+- `url: Optional[str]`
+
+**`Sbom`** – Software Bill of Materials (placeholder for Trivy output):
+- `raw: Optional[dict]`
+
+**`VulnReport`** – Vulnerability report (placeholder for Grype output):
+- `raw: Optional[dict]`
+
+**`Finding`** – Security finding from an analyzer:
+- `source: str`
+- `message: str`
+- `severity: str` (`"info"` | `"low"` | `"medium"` | `"high"` | `"critical"`)
+
+**`Context`** – Shared data passed through tasks and analyzers:
+- `package_name: str`
+- `requested_version: Optional[str]`
+- `repo_source: Optional[str]` – Repository source (`"pypi"` or `"npm"`)
+- `package: Optional[PackageMetadata]`
+- `repo: Optional[RepoInfo]`
+- `sbom: Optional[Sbom]`
+- `vulns: Optional[VulnReport]`
+- `findings: list[Finding]`
+- `log_display: Optional[LogDisplay]` – Reference to UI log component
+- `status_bar: Optional[StatusBar]` – Reference to UI status bar component
+
+**`AuditResult`** – Final result of the audit pipeline:
+- `ctx: Context`
+- `score: int`
+- `pdf_path: Optional[str]`
 
 ### `domain/protocols.py`
 
-Define simple `Protocol` interfaces:
+Protocol interfaces for extensibility:
 
-- `Analyzer` – has `name: str` and `run(self, ctx: Context) -> Iterable[Finding]`.
-- `Task` – has `name: str` and `run(self, ctx: Context) -> Context`.
+**`Analyzer`** – Security analyzer interface:
+- `name: str`
+- `run(self, ctx: Context) -> Iterable[Finding]`
+
+**`Task`** – Pipeline task interface:
+- `name: str`
+- `get_status_message(self, ctx: Context) -> str` – Returns status message for UI
+- `run(self, ctx: Context) -> Context` – Executes task and returns updated context
+
+### `domain/exceptions.py`
+
+**`PipelineFatalError`** – Exception to signal pipeline termination:
+- `message: str` – Error description
+- `source: Optional[str]` – Task/component that raised the error
+
+When raised by a task, the pipeline stops execution and returns a partial result.
 
 ### `domain/scoring.py`
 
-- Implement `compute_risk_score(result: AuditResult) -> int` as a **stub** that returns a fixed value (e.g. `42`). Later this will inspect findings.
+- `compute_risk_score(result: AuditResult) -> int` – Computes risk score based on findings
 
 ---
 
-## Analyzer plugin system (stubbed)
+## Pipeline Architecture
 
-### `analyzers/__init__.py`
+### Task Registry (`services/tasks/__init__.py`)
 
-- Maintain a simple registry of analyzers:
-  - `_ANALYZERS: list[Analyzer] = []`.
-  - `register(analyzer: Analyzer) -> None`.
-  - `all_analyzers() -> list[Analyzer]`.
+Tasks are registered by name and resolved at runtime:
 
-### `analyzers/metadata.py`
+```python
+_TASKS: Dict[str, Task] = {}
 
-- Implement `MetadataAnalyzer` with `name = "metadata"`.
-- In `run(self, ctx: Context)`, return:
-  - If `ctx.package` is `None`, one `Finding` saying metadata is missing (stub).
-  - Else, one `Finding` saying it stub-analyzed the package and version.
-- At import time, call `register(MetadataAnalyzer())`.
+def register(task: Task) -> None:
+    """Register a task by name."""
+    _TASKS[task.name] = task
+
+def get_task(name: str) -> Optional[Task]:
+    """Retrieve a task by name."""
+    return _TASKS.get(name)
+
+def all_tasks() -> List[Task]:
+    """Get all registered tasks."""
+    return list(_TASKS.values())
+```
+
+Tasks auto-register themselves at import time:
+```python
+# At bottom of each task module
+register(FetchPyPi())
+```
+
+### Chain-Based Pipeline (`services/pipeline.py`)
+
+The pipeline supports multiple repository sources via task chains:
+
+```python
+CHAINS = {
+    "pypi": [
+        "fetch_pypi",
+        "run_analyses",
+    ],
+    "npm": [
+        "fetch_npm",
+        "run_analyses",
+    ],
+}
+```
+
+**`run_pipeline(ctx: Context) -> AuditResult`**:
+
+1. **Validate** `ctx.repo_source` is set and exists in `CHAINS`
+2. **Resolve** task names from registry via `get_task()`
+3. **Execute** tasks in order:
+   - Update status bar before each task
+   - Run task, passing context
+   - Catch `PipelineFatalError` and return partial result
+4. **Compute** risk score via `compute_risk_score()`
+5. **Generate** PDF report via `write_pdf_report()`
+6. **Return** `AuditResult` with score and PDF path
+
+### Task Implementations
+
+**`FetchPyPi`** (`services/tasks/fetch_pypi.py`):
+- Fetches package metadata from PyPI JSON API
+- Sets `ctx.package` with retrieved metadata
+- Raises `PipelineFatalError` if package not found
+
+**`FetchNpm`** (`services/tasks/fetch_npm.py`):
+- Fetches package metadata from NPM Registry API
+- Sets `ctx.package` with retrieved metadata
+- Raises `PipelineFatalError` if package not found
+
+**`RunAnalyses`** (`services/tasks/run_analyses.py`):
+- Iterates over all registered analyzers
+- Extends `ctx.findings` with analyzer results
 
 ---
 
-## Adapters (stub external services)
+## Adapters (HTTP Clients)
 
 ### `adapters/pypi_client.py`
 
-- Implement `fetch_package_metadata_stub(name: str, version: str | None) -> PackageMetadata`.
-- Do **not** call the network. Just return a `PackageMetadata` instance with:
-  - `name` as provided.
-  - `version` set to provided version or a placeholder like `"0.0.0-stub"`.
-  - `summary` set to an explanatory stub string.
+Real HTTP client for PyPI JSON API:
+
+**Exception classes:**
+- `PyPIError` – Base exception
+- `PackageNotFoundError` – Package or version not found (404)
+- `NetworkError` – Network connection issues
+
+**Functions:**
+- `fetch_package_metadata(name: str, version: Optional[str] = None) -> PackageMetadata`
+  - URL: `https://pypi.org/pypi/{name}/json` or `https://pypi.org/pypi/{name}/{version}/json`
+  - Parses JSON response into `PackageMetadata`
+
+### `adapters/npm_client.py`
+
+Real HTTP client for NPM Registry API:
+
+**Exception classes:**
+- `NPMError` – Base exception
+- `PackageNotFoundError` – Package or version not found (404)
+- `NetworkError` – Network connection issues
+
+**Functions:**
+- `fetch_package_metadata(name: str, version: Optional[str] = None) -> PackageMetadata`
+  - URL: `https://registry.npmjs.org/{name}` or `https://registry.npmjs.org/{name}/{version}`
+  - Parses JSON response into `PackageMetadata`
 
 ---
 
-## Services / tasks / pipeline (stub but wired)
+## Analyzer System
 
-### `services/tasks/fetch_pypi.py`
+### Analyzer Registry (`analyzers/__init__.py`)
 
-- Implement a `FetchPyPi` class conforming to `Task`.
-- In `run(self, ctx: Context) -> Context`:
-  - Set `ctx.package = fetch_package_metadata_stub(ctx.package_name, ctx.requested_version)`.
-  - Append a `Finding` to `ctx.findings` indicating that stub metadata was fetched.
+```python
+_ANALYZERS: list[Analyzer] = []
 
-### `services/tasks/run_analyses.py`
+def register(analyzer: Analyzer) -> None:
+    """Register an analyzer."""
+    _ANALYZERS.append(analyzer)
 
-- Implement a `RunAnalyses` class conforming to `Task`.
-- In `run(self, ctx: Context) -> Context`:
-  - Iterate over all analyzers returned by `analyzers.all_analyzers()`.
-  - Extend `ctx.findings` with their results.
+def all_analyzers() -> list[Analyzer]:
+    """Get all registered analyzers."""
+    return _ANALYZERS
+```
 
-### `services/pipeline.py`
+### `MetadataAnalyzer` (`analyzers/metadata.py`)
 
-- Create a `TASKS` list with the two tasks in order:
-  - `FetchPyPi()`
-  - `RunAnalyses()`
-- Implement `run_pipeline(ctx: Context) -> AuditResult`:
-  - Run each task in order, updating `ctx`.
-  - Construct an `AuditResult` from the final `ctx`.
-  - Compute a stub score via `compute_risk_score` and assign it.
-  - Return the `AuditResult`.
+- `name = "metadata"`
+- Analyzes package metadata and produces findings
+- Auto-registers at import time
 
 ---
 
-## PDF report generation
+## TUI Architecture
 
-Add a simple PDF reporting module and integrate it into the audit flow.
+The TUI follows an MVC-like pattern (see `architecture_notes.md` for details):
+
+### Components Layer (`app/components/`)
+
+UI widgets with simple interfaces:
+
+- **`LogDisplay`** – Wraps RichLog, provides `write()`, `clear()`, `write_section()`
+- **`StatusBar`** – Wraps Static, provides `update()`
+- **`InputSection`** – Wraps Input, provides `get_value()`, `set_value()`, `get_package_info()`
+
+### Actions Layer (`app/actions/`)
+
+Independent action handlers:
+
+- **`AuditAction`** – Handles audit execution
+  - Takes UI components as constructor dependencies
+  - Creates `Context` with `log_display` and `status_bar` references
+  - Calls `run_pipeline()` and displays results
+
+### State Layer (`app/state.py`)
+
+Application-wide state:
+
+- **`AppState`** – Tracks `has_run_audit`, `current_package`, `audit_result`
+
+### Main App (`app/main.py`)
+
+Thin orchestrator:
+- Composes UI in `compose()`
+- Initializes components and actions in `on_mount()`
+- Routes events to action handlers
+- Updates UI based on state changes
+
+---
+
+## PDF Report Generation
 
 ### `services/reporting.py`
 
-- Use **ReportLab** (`reportlab` package) as the PDF generation library.
-- Implement two functions:
-  - `render_text_report(result: AuditResult) -> str` – returns a multi-line string representation of the audit result (for now, include only stub information like package name, version, score, and count of findings).
-  - `write_pdf_report(result: AuditResult, output_dir: Path | str | None = None) -> Path` – creates a PDF file containing a stub report and returns the path to the generated PDF.
+Uses **ReportLab** for PDF generation:
 
-Implementation details (stub version):
-- Use `reportlab.pdfgen.canvas.Canvas` to create the PDF.
-- Place simple text on the first page, e.g.:
-  - Title: `"vibanalyz – Stub Audit Report"`.
-  - Package name and version.
-  - Stub score and a short note that this is a placeholder report.
-- For now, write the PDF into a temporary or current working directory, using a filename like `"vibanalyz-<package-name>-report.pdf"`.
-- Return the absolute `Path` to the created file.
+- `render_text_report(result: AuditResult) -> str` – Text representation of audit result
+- `write_pdf_report(result: AuditResult, output_dir: Path | str | None = None) -> Path` – Creates PDF report
 
-Update `AuditResult` in `domain/models.py`:
-- Add an optional field `pdf_path: Optional[str] = None` to store the path to the generated PDF report.
+---
 
-Update the pipeline integration (`services/pipeline.py`):
-- After building the `AuditResult` and computing the score, call `write_pdf_report(result)`.
-- Store the returned path on `result.pdf_path`.
-
-
-## Textual TUI / CLI
-
-### `app/main.py`
-
-Implement a simple Textual app called `AuditApp` with these behaviors:
-
-- Layout:
-  - `Header` and `Footer` widgets.
-  - A static title: `"vibanalyz – MVP stub"`.
-  - A brief instruction line.
-  - An `Input` widget for package name.
-  - A `Button` labeled `"Run audit"`.
-  - A `TextLog` for showing progress and results.
-
-- Constructor:
-  - Accept an optional `package_name: str | None`.
-  - Store this for use after mount.
-
-- On mount:
-  - If `package_name` is provided, schedule an auto-run (call an async method like `_auto_run`).
-
-- Logic:
-  - When the button is pressed, read from `Input` and call an async `run_audit(name: str)` method.
-  - `run_audit` should:
-    - Clear the `TextLog`.
-    - Log a starting message including the package name.
-    - Create a `Context` with `package_name=name`.
-    - Call `run_pipeline(ctx)`.
-    - Log a finishing message including the stub score.
-    - Log the findings list with severity, source, and message.
-  - If `result.pdf_path` is not `None`, log a final line such as:
-    - `"PDF report saved to: <absolute-path>"`
-    so that many terminals will let the user click the path to open the PDF on their local machine.
+## CLI
 
 ### `cli.py`
 
-- Implement `main()` that:
-  - Uses `argparse` to accept an optional positional `package` argument.
-  - Instantiates and runs `AuditApp(package_name=args.package)`.
-
-- Ensure `pyproject.toml` defines a console script:
+- Uses `argparse` for CLI arguments
+- Accepts optional positional `package` argument
+- Instantiates and runs `AuditApp`
 
 ```toml
 [project.scripts]
@@ -248,49 +358,77 @@ vibanalyz = "vibanalyz.cli:main"
 
 ---
 
-## Dockerfile (Chainguard Python, single image)
-
-Create a `Dockerfile` that:
-
-- Uses the latest Chainguard Python image:
+## Dockerfile
 
 ```dockerfile
 FROM cgr.dev/chainguard/python:latest
+
+WORKDIR /app
+COPY pyproject.toml .
+COPY src/ src/
+RUN pip install --no-cache-dir .
+
+ENTRYPOINT ["vibanalyz"]
 ```
 
-- Sets `WORKDIR /app`.
-- Copies `pyproject.toml` and `src/` into the image.
-- Installs the project with `pip install --no-cache-dir .`.
-- Sets `ENTRYPOINT ["vibanalyz"]` so running the container launches the TUI.
-
-The final image should be runnable like:
-
+Usage:
 ```bash
 docker build -t vibanalyz .
 docker run --rm -it vibanalyz requests
 ```
 
-This should bring up the Textual UI, auto-run a stub audit for `requests`, and print stub findings and a stub score.
+---
+
+## Adding New Repository Sources
+
+To add a new repository source (e.g., RubyGems):
+
+1. **Create adapter** (`adapters/rubygems_client.py`):
+   - Exception classes: `RubyGemsError`, `PackageNotFoundError`, `NetworkError`
+   - Function: `fetch_package_metadata(name, version) -> PackageMetadata`
+
+2. **Create task** (`services/tasks/fetch_rubygems.py`):
+   - Class `FetchRubyGems` implementing `Task` protocol
+   - Auto-register at bottom: `register(FetchRubyGems())`
+
+3. **Update pipeline** (`services/pipeline.py`):
+   - Add chain: `"rubygems": ["fetch_rubygems", "run_analyses"]`
+
+4. **Update task imports** (`services/tasks/__init__.py`):
+   - Add: `from vibanalyz.services.tasks import fetch_rubygems`
 
 ---
 
-## Output format
+## Error Handling
 
-When you respond to this prompt, generate **all project files** inline, organized by path, like:
+### Pipeline Errors
 
-```text
-pyproject.toml
-```toml
-# contents
-```
+- **Missing repo_source**: `ValueError` raised if `ctx.repo_source` not set
+- **Unknown repo_source**: `ValueError` raised if not in `CHAINS`
+- **Missing tasks**: `ValueError` raised if task not found in registry
+- **Fatal errors**: `PipelineFatalError` caught, partial result returned
 
-```text
-src/vibanalyz/cli.py
-```python
-# contents
-```
+### Adapter Errors
 
-…and so on for all files described above.
+- **PackageNotFoundError**: Raised on 404, triggers `PipelineFatalError` in task
+- **NetworkError**: Raised on connection issues, added as warning finding
+- **Base errors** (PyPIError/NPMError): Caught and added as warning finding
 
-Do not include any real network calls or Trivy/Grype integration yet. All functionality should be stubbed, but the structure should be realistic and ready to extend later.
+---
 
+## Summary
+
+| Layer | Purpose |
+|-------|---------|
+| **Domain** | Data models, protocols, exceptions, scoring |
+| **Adapters** | HTTP clients for external registries |
+| **Services** | Pipeline orchestration, task registry, PDF reporting |
+| **Analyzers** | Security analysis plugins |
+| **App** | TUI components, actions, state, orchestration |
+| **CLI** | Command-line entrypoint |
+
+The architecture supports:
+- Multiple repository sources via chain-based pipeline
+- Extensible task and analyzer systems via registries
+- Clean separation of UI (components), logic (actions), and state
+- Graceful error handling with `PipelineFatalError`

@@ -20,6 +20,10 @@ class Task(Protocol):
 
     name: str
 
+    def get_status_message(self, ctx: Context) -> str:
+        """Generate status message for this task."""
+        ...
+
     def run(self, ctx: Context) -> Context:
         """Run the task and return updated context."""
         ...

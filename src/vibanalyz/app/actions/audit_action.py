@@ -2,6 +2,7 @@
 
 from vibanalyz.app.components.log_display import LogDisplay
 from vibanalyz.app.components.status_bar import StatusBar
+from vibanalyz.domain.exceptions import PipelineFatalError
 from vibanalyz.domain.models import AuditResult, Context
 from vibanalyz.services.pipeline import run_pipeline
 
@@ -15,7 +16,7 @@ class AuditAction:
         self.status = status_bar
 
     async def execute(
-        self, package_name: str, version: str | None = None
+        self, package_name: str, version: str | None = None, repo_source: str = "pypi"
     ) -> AuditResult:
         """
         Execute audit and update UI.
@@ -23,6 +24,7 @@ class AuditAction:
         Args:
             package_name: Package name to audit
             version: Optional version string
+            repo_source: Repository source type (e.g., "pypi", "npm")
         
         Returns:
             AuditResult from the pipeline
@@ -35,12 +37,18 @@ class AuditAction:
         
         # Log audit start
         version_info = f"=={version}" if version else ""
-        self.log.write(f"Starting audit for package: {package_name}{version_info}")
+        self.log.write(f"Starting audit for package: {package_name}{version_info} (source: {repo_source})")
         self.log.write("Running pipeline...")
 
         try:
-            # Create context
-            ctx = Context(package_name=package_name, requested_version=version)
+            # Create context with TUI components for real-time updates
+            ctx = Context(
+                package_name=package_name,
+                requested_version=version,
+                repo_source=repo_source,
+                log_display=self.log,
+                status_bar=self.status,
+            )
 
             # Run pipeline
             result = run_pipeline(ctx)
@@ -53,10 +61,23 @@ class AuditAction:
             self._display_results(result)
 
             # Update status when done
-            self.status.update("Audit complete. Waiting for user input.")
+            # Check if there were fatal errors (critical findings from pipeline)
+            has_fatal_error = any(
+                f.severity == "critical" and f.source in ["pipeline", "fetch_pypi"]
+                for f in result.ctx.findings
+            )
+            if has_fatal_error:
+                self.status.update("Audit terminated due to fatal error. Waiting for user input.")
+            else:
+                self.status.update("Audit complete. Waiting for user input.")
 
             return result
 
+        except PipelineFatalError as e:
+            # PipelineFatalError should be caught by pipeline, but handle if it propagates
+            self.log.write(f"\nFatal error during audit: {e.message}")
+            self.status.update("Audit terminated due to fatal error. Waiting for user input.")
+            raise
         except Exception as e:
             self.log.write(f"\nError during audit: {e}")
             import traceback

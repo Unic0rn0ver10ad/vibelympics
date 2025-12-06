@@ -4,6 +4,12 @@ from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Button, Footer, Header, Input, Label, RichLog, Static
 
+from vibanalyz.app.actions.audit_action import AuditAction
+from vibanalyz.app.components.input_section import InputSection
+from vibanalyz.app.components.log_display import LogDisplay
+from vibanalyz.app.components.status_bar import StatusBar
+from vibanalyz.app.state import AppState
+
 
 class AuditApp(App):
     """Main audit application TUI."""
@@ -68,6 +74,9 @@ class AuditApp(App):
         """Initialize the app with optional package name."""
         super().__init__()
         self.package_name = package_name
+        self.state = AppState()
+        self.components: dict[str, LogDisplay | StatusBar | InputSection] = {}
+        self.actions: dict[str, AuditAction] = {}
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -87,87 +96,73 @@ class AuditApp(App):
 
     def on_mount(self) -> None:
         """Called when app is mounted."""
-        # Set initial welcome message in RichLog
-        log = self.query_one("#results-log", RichLog)
-        log.write("Welcome to Vibanalyz MVP 1.0")
-        
+        # Initialize components
+        self.components["log"] = LogDisplay(self.query_one("#results-log", RichLog))
+        self.components["status"] = StatusBar(self.query_one("#status-bar", Static))
+        self.components["input"] = InputSection(
+            self.query_one("#package-input", Input)
+        )
+
+        # Initialize actions
+        self.actions["audit"] = AuditAction(
+            self.components["log"], self.components["status"]
+        )
+
+        # Set initial welcome message
+        self.components["log"].write("Welcome to Vibanalyz MVP 1.0")
+
         if self.package_name:
             # Auto-run audit if package name was provided
             self.set_timer(0.1, self._auto_run)
 
-    def _auto_run(self) -> None:
+    async def _auto_run(self) -> None:
         """Auto-run audit with the provided package name."""
-        input_widget = self.query_one("#package-input", Input)
-        input_widget.value = self.package_name
-        self.run_audit(self.package_name)
+        if self.package_name:
+            self.components["input"].set_value(self.package_name)
+            package_name, version = self.components["input"].get_package_info()
+            await self._handle_audit(package_name, version)
 
-    def _trigger_audit(self) -> None:
-        """Helper method to trigger audit from button or Enter key."""
-        input_widget = self.query_one("#package-input", Input)
-        package_name = input_widget.value.strip()
-        if package_name:
-            # Log user selection
-            log = self.query_one("#results-log", RichLog)
-            log.write(f"User selected: {package_name}")
-            
-            # Update status when audit starts
-            status = self.query_one("#status-bar", Static)
-            status.update("Running audit...")
-            self.run_audit(package_name)
+    async def _handle_audit(self, package_name: str, version: str | None = None) -> None:
+        """Handle audit action."""
+        if not package_name:
+            self.components["log"].write("Please enter a valid package name.")
+            return
+
+        # Log user selection
+        if version:
+            self.components["log"].write(f"User selected: {package_name}=={version}")
         else:
-            log = self.query_one("#results-log", RichLog)
-            log.write("Please enter a package name.")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press events."""
-        if event.button.id == "audit-button":
-            self._trigger_audit()
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle Enter key press in input field."""
-        if event.input.id == "package-input":
-            self._trigger_audit()
-
-    async def run_audit(self, name: str) -> None:
-        """Run the audit pipeline for the given package name."""
-        from vibanalyz.domain.models import Context
-        from vibanalyz.services.pipeline import run_pipeline
-
-        log = self.query_one("#results-log", RichLog)
-        # Don't clear - keep the "User selected" line
-        log.write(f"Starting audit for package: {name}")
-        log.write("Running pipeline...")
+            self.components["log"].write(f"User selected: {package_name}")
 
         try:
-            # Create context
-            ctx = Context(package_name=name)
+            # Execute audit action
+            result = await self.actions["audit"].execute(package_name, version)
 
-            # Run pipeline
-            result = run_pipeline(ctx)
+            # Update state
+            self.state.mark_audit_complete(package_name, version, result)
 
-            # Log results
-            log.write(f"\nAudit complete!")
-            log.write(f"Risk Score: {result.score}")
-            log.write(f"Findings: {len(result.ctx.findings)}")
+            # Update UI based on state (e.g., show/hide buttons)
+            self._update_ui_for_state()
 
-            if result.ctx.findings:
-                log.write("\nFindings:")
-                for finding in result.ctx.findings:
-                    log.write(
-                        f"  [{finding.severity.upper()}] {finding.source}: {finding.message}"
-                    )
+        except Exception:
+            # Error handling is done in AuditAction
+            pass
 
-            if result.pdf_path:
-                log.write(f"\nPDF report saved to: {result.pdf_path}")
+    def _update_ui_for_state(self) -> None:
+        """Update UI components based on current state."""
+        # Future: Show/hide buttons, enable/disable features based on state
+        # For now, this is a placeholder for future enhancements
+        pass
 
-            # Update status when done
-            status = self.query_one("#status-bar", Static)
-            status.update("Audit complete. Waiting for user input.")
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press events."""
+        if event.button.id == "audit-button":
+            package_name, version = self.components["input"].get_package_info()
+            await self._handle_audit(package_name, version)
 
-        except Exception as e:
-            log.write(f"\nError during audit: {e}")
-            import traceback
-            log.write(traceback.format_exc())
-            status = self.query_one("#status-bar", Static)
-            status.update("Error occurred. Waiting for user input.")
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle Enter key press in input field."""
+        if event.input.id == "package-input":
+            package_name, version = self.components["input"].get_package_info()
+            await self._handle_audit(package_name, version)
 

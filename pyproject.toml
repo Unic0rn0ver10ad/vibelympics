@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "textual>=0.40.0",
     "reportlab>=4.0.0",
+    "requests>=2.31.0",
 ]
 
 [project.scripts]

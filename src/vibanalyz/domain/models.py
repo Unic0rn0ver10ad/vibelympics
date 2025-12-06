@@ -11,6 +11,14 @@ class PackageMetadata:
     name: str
     version: Optional[str] = None
     summary: Optional[str] = None
+    maintainers: Optional[list[str]] = None
+    home_page: Optional[str] = None
+    project_urls: Optional[dict[str, str]] = None
+    requires_dist: Optional[list[str]] = None
+    author: Optional[str] = None
+    author_email: Optional[str] = None
+    license: Optional[str] = None
+    release_count: Optional[int] = None
 
 
 @dataclass

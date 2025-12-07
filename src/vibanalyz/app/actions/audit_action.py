@@ -1,6 +1,7 @@
 """Action handler for running audits."""
 
 from vibanalyz.app.components.log_display import LogDisplay
+from vibanalyz.app.components.progress_tracker import ProgressTracker
 from vibanalyz.app.components.status_bar import StatusBar
 from vibanalyz.domain.exceptions import PipelineFatalError
 from vibanalyz.domain.models import AuditResult, Context
@@ -10,10 +11,16 @@ from vibanalyz.services.pipeline import run_pipeline
 class AuditAction:
     """Handles audit execution and result display."""
 
-    def __init__(self, log_display: LogDisplay, status_bar: StatusBar):
+    def __init__(
+        self,
+        log_display: LogDisplay,
+        status_bar: StatusBar,
+        progress_tracker: ProgressTracker,
+    ):
         """Initialize with UI components."""
         self.log = log_display
         self.status = status_bar
+        self.progress = progress_tracker
 
     async def execute(
         self, package_name: str, version: str | None = None, repo_source: str = "pypi"
@@ -48,6 +55,7 @@ class AuditAction:
                 repo_source=repo_source,
                 log_display=self.log,
                 status_bar=self.status,
+                progress_tracker=self.progress,
             )
 
             # Run pipeline

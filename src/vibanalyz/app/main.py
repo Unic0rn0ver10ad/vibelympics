@@ -7,6 +7,7 @@ from textual.widgets import Button, Footer, Header, Input, Label, RichLog, Stati
 from vibanalyz.app.actions.audit_action import AuditAction
 from vibanalyz.app.components.input_section import InputSection
 from vibanalyz.app.components.log_display import LogDisplay
+from vibanalyz.app.components.progress_tracker import ProgressTracker
 from vibanalyz.app.components.status_bar import StatusBar
 from vibanalyz.app.state import AppState
 
@@ -84,6 +85,11 @@ class AuditApp(App):
         margin-top: 0;
         margin-bottom: 0;
     }
+
+    ProgressTracker {
+        margin-top: 1;
+        margin-bottom: 1;
+    }
     
     Label.repo-label {
         width: 6;
@@ -104,7 +110,7 @@ class AuditApp(App):
         super().__init__()
         self.package_name = package_name
         self.state = AppState()
-        self.components: dict[str, LogDisplay | StatusBar | InputSection] = {}
+        self.components: dict[str, LogDisplay | StatusBar | InputSection | ProgressTracker] = {}
         self.actions: dict[str, AuditAction] = {}
         self.selected_repo: str = "pypi"  # Default to PyPI
 
@@ -127,6 +133,7 @@ class AuditApp(App):
                     id="action-row",
                 ),
             ),
+            ProgressTracker(id="progress-tracker"),
             RichLog(id="results-log"),
             Horizontal(
                 Button("Copy log", id="copy-log-button"),
@@ -141,13 +148,16 @@ class AuditApp(App):
         # Initialize components
         self.components["log"] = LogDisplay(self.query_one("#results-log", RichLog))
         self.components["status"] = StatusBar(self.query_one("#status-bar", Static))
+        self.components["progress"] = self.query_one("#progress-tracker", ProgressTracker)
         self.components["input"] = InputSection(
             self.query_one("#package-input", Input)
         )
 
         # Initialize actions
         self.actions["audit"] = AuditAction(
-            self.components["log"], self.components["status"]
+            self.components["log"],
+            self.components["status"],
+            self.components["progress"],
         )
 
         # Set initial welcome message
@@ -244,7 +254,10 @@ class AuditApp(App):
         
         # Reset status bar to default message
         self.components["status"].update("Waiting for user input.")
-        
+
+        # Reset progress tracker
+        self.components["progress"].reset()
+
         # Clear the log display
         self.components["log"].clear()
         

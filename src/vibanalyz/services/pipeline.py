@@ -11,6 +11,8 @@ from vibanalyz.services.tasks import get_task
 CHAINS = {
     "pypi": [
         "fetch_pypi",
+        "download_pypi",
+        "generate_sbom",
         "run_analyses",
     ],
     "npm": [

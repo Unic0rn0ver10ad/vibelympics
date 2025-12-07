@@ -26,6 +26,16 @@ class PackageMetadata:
 
 
 @dataclass
+class DownloadInfo:
+    """Package download information."""
+
+    url: str
+    filename: str
+    package_type: str  # "bdist_wheel" or "sdist"
+    local_path: Optional[str] = None
+
+
+@dataclass
 class RepoInfo:
     """Repository information."""
 
@@ -37,6 +47,7 @@ class Sbom:
     """Software Bill of Materials."""
 
     raw: Optional[dict] = None
+    file_path: Optional[str] = None
 
 
 @dataclass
@@ -63,6 +74,7 @@ class Context:
     requested_version: Optional[str] = None
     repo_source: Optional[str] = None
     package: Optional[PackageMetadata] = None
+    download_info: Optional[DownloadInfo] = None
     repo: Optional[RepoInfo] = None
     sbom: Optional[Sbom] = None
     vulns: Optional[VulnReport] = None

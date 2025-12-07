@@ -5,7 +5,7 @@ from typing import Optional
 
 import requests
 
-from vibanalyz.domain.models import PackageMetadata
+from vibanalyz.domain.models import DownloadInfo, PackageMetadata
 
 
 class PyPIError(Exception):
@@ -156,4 +156,76 @@ def fetch_package_metadata_stub(name: str, version: str | None = None) -> Packag
         version=version or "0.0.0-stub",
         summary="This is a stub metadata response. Real PyPI integration will be implemented later.",
     )
+
+
+def get_download_info(name: str, version: str) -> DownloadInfo:
+    """
+    Get download URL for a specific package version from PyPI.
+
+    Prefers wheel (bdist_wheel) over source distribution (sdist).
+
+    Args:
+        name: Package name
+        version: Version string to download
+
+    Returns:
+        DownloadInfo with URL, filename, and package_type
+
+    Raises:
+        PackageNotFoundError: If package or version not found
+        NetworkError: For network-related issues
+        PyPIError: For other errors
+    """
+    url = f"https://pypi.org/pypi/{name}/{version}/json"
+
+    try:
+        response = requests.get(url, timeout=10)
+
+        if response.status_code == 404:
+            raise PackageNotFoundError(f"Version '{version}' not found for package '{name}'")
+
+        response.raise_for_status()
+
+        try:
+            data = response.json()
+        except json.JSONDecodeError as e:
+            raise PyPIError(f"Invalid JSON response from PyPI: {e}")
+
+        # When fetching a specific version, PyPI returns files in top-level "urls" array
+        # Fall back to releases[version] if urls is not present
+        files = data.get("urls", [])
+        if not files:
+            releases = data.get("releases", {})
+            files = releases.get(version, [])
+
+        # Prefer wheel over sdist
+        selected = None
+        for file_info in files:
+            if file_info.get("packagetype") == "bdist_wheel":
+                selected = file_info
+                break
+
+        if not selected and files:
+            # Fallback to first available (likely sdist)
+            selected = files[0]
+
+        if not selected:
+            raise PyPIError(f"No downloadable files found for {name}=={version}")
+
+        return DownloadInfo(
+            url=selected.get("url", ""),
+            filename=selected.get("filename", ""),
+            package_type=selected.get("packagetype", ""),
+        )
+
+    except requests.exceptions.Timeout:
+        raise NetworkError("Connection to PyPI timed out. Please check your internet connection.")
+    except requests.exceptions.ConnectionError as e:
+        raise NetworkError(f"Unable to connect to PyPI: {e}")
+    except requests.exceptions.RequestException as e:
+        raise NetworkError(f"Network error while fetching from PyPI: {e}")
+    except (PackageNotFoundError, PyPIError):
+        raise
+    except Exception as e:
+        raise PyPIError(f"Unexpected error fetching download info from PyPI: {e}")
 

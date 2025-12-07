@@ -72,6 +72,11 @@ class AuditApp(App):
         min-height: 10;
     }
     
+    Horizontal#log-actions-row {
+        margin-top: 1;
+        margin-bottom: 1;
+    }
+    
     Static#status-bar {
         padding: 1;
         text-align: left;
@@ -123,6 +128,10 @@ class AuditApp(App):
                 ),
             ),
             RichLog(id="results-log"),
+            Horizontal(
+                Button("Copy log", id="copy-log-button"),
+                id="log-actions-row",
+            ),
             Static("Waiting for user input.", id="status-bar"),
         )
         yield Footer()
@@ -252,7 +261,17 @@ class AuditApp(App):
         """Handle button press events."""
         button_id = event.button.id
         
-        if button_id == "audit-button":
+        if button_id == "copy-log-button":
+            text = self.components["log"].get_text()
+            if text:
+                try:
+                    self.copy_to_clipboard(text)
+                    self.components["log"].write("[log] Copied log to clipboard.")
+                except Exception as e:
+                    self.components["log"].write(f"[log] Failed to copy log: {e}")
+            else:
+                self.components["log"].write("[log] Nothing to copy.")
+        elif button_id == "audit-button":
             package_name, version = self.components["input"].get_package_info()
             repo_source = self._get_repo_source()
             await self._handle_audit(package_name, version, repo_source)

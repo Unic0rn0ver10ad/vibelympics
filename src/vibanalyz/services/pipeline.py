@@ -69,12 +69,20 @@ def run_pipeline(ctx: Context) -> AuditResult:
         raise ValueError(error_msg)
     
     # Run each task in order
-    for task in tasks:
+    if ctx.progress_tracker:
+        ctx.progress_tracker.set_chain(task_names)
+
+    for index, task in enumerate(tasks):
         # Update status bar before task starts
         if ctx.status_bar:
             status_msg = task.get_status_message(ctx)
             ctx.status_bar.update(status_msg)
-        
+        else:
+            status_msg = task.get_status_message(ctx)
+
+        if ctx.progress_tracker:
+            ctx.progress_tracker.start_task(index, status_msg)
+
         try:
             # Run task (task can use ctx.log_display for detailed logging)
             ctx = task.run(ctx)
@@ -82,6 +90,11 @@ def run_pipeline(ctx: Context) -> AuditResult:
             # Fatal error - stop pipeline execution
             if ctx.log_display:
                 ctx.log_display.write(f"[pipeline] FATAL ERROR: {e.message}")
+            if ctx.progress_tracker:
+                ctx.progress_tracker.update_detail(
+                    f"Pipeline stopped: {e.message}", progress=0.0
+                )
+                ctx.progress_tracker.finish_task(index, "Pipeline halted")
             ctx.findings.append(
                 Finding(
                     source=e.source or "pipeline",
@@ -93,6 +106,9 @@ def run_pipeline(ctx: Context) -> AuditResult:
             result = AuditResult(ctx=ctx, score=0)
             result.score = compute_risk_score(result)
             return result
+
+        if ctx.progress_tracker:
+            ctx.progress_tracker.finish_task(index, f"{task.name} complete")
     
     # Compute score
     result = AuditResult(ctx=ctx, score=0)

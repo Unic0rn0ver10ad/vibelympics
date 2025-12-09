@@ -360,21 +360,29 @@ vibanalyz = "vibanalyz.cli:main"
 
 ## Dockerfile
 
-```dockerfile
-FROM cgr.dev/chainguard/python:latest
+**CRITICAL**: The Dockerfile **MUST** use Chainguard Python images (`cgr.dev/chainguard/python:latest-dev`) for security and compliance. Do not revert to standard Python images (e.g., `python:3.11-slim`).
 
-WORKDIR /app
-COPY pyproject.toml .
-COPY src/ src/
-RUN pip install --no-cache-dir .
+The Dockerfile uses a multi-stage build:
 
-ENTRYPOINT ["vibanalyz"]
-```
+1. **Builder stage**: Uses `cgr.dev/chainguard/python:latest-dev` to install build dependencies and compile Python packages
+2. **Runtime stage**: Uses `cgr.dev/chainguard/python:latest-dev` with runtime libraries, Syft CLI, and runs as non-root user
+
+Key features:
+- Uses `apk` package manager (Wolfi/Alpine-based)
+- Runs as `nonroot:nonroot` user for security
+- Creates `/app/output` directory for reports and SBOMs (writable by nonroot)
+- Sets `WORKDIR /app/output` so generated files are written to a writable location
+- Installs Syft CLI using Python's tarfile module (since `tar` package isn't available in Wolfi)
 
 Usage:
 ```bash
 docker build -t vibanalyz .
 docker run --rm -it vibanalyz requests
+```
+
+To access generated reports and SBOMs:
+```bash
+docker run --rm -it -v $(pwd)/output:/app/output vibanalyz requests
 ```
 
 ---

@@ -140,10 +140,11 @@ class GenerateSbom:
 
     def get_status_message(self, ctx: Context) -> str:
         """Generate status message for this task."""
-        return f"Generating SBOM for {ctx.package_name}."
+        return "Generate SBOM"
 
     def run(self, ctx: Context) -> Context:
         """Generate SBOM and update context."""
+        # Status is updated by pipeline before task runs
         if not ctx.download_info or not ctx.download_info.local_path:
             raise PipelineFatalError(
                 message="Cannot generate SBOM: package artifact not downloaded",

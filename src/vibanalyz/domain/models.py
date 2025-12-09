@@ -5,8 +5,6 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from vibanalyz.app.components.log_display import LogDisplay
-    from vibanalyz.app.components.progress_tracker import ProgressTracker
-    from vibanalyz.app.components.status_bar import StatusBar
 
 
 @dataclass
@@ -81,8 +79,6 @@ class Context:
     vulns: Optional[VulnReport] = None
     findings: list[Finding] = field(default_factory=list)
     log_display: Optional["LogDisplay"] = None
-    status_bar: Optional["StatusBar"] = None
-    progress_tracker: Optional["ProgressTracker"] = None
 
 
 @dataclass

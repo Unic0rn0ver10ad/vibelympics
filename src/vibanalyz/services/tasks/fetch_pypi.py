@@ -19,29 +19,21 @@ class FetchPyPi:
 
     def get_status_message(self, ctx: Context) -> str:
         """Generate status message for this task."""
-        return f"Contacting PyPI repo for {ctx.package_name} module."
+        return "Query Repo"
 
     def run(self, ctx: Context) -> Context:
         """Fetch PyPI metadata and update context."""
+        # Status is updated by pipeline before task runs
         # Log start of fetch operation
         if ctx.log_display:
             version_info = f"=={ctx.requested_version}" if ctx.requested_version else ""
             ctx.log_display.write(f"[{self.name}] Starting fetch for {ctx.package_name}{version_info}")
             ctx.log_display.write(f"[{self.name}] Connecting to PyPI API...")
-        if ctx.progress_tracker:
-            ctx.progress_tracker.update_detail(
-                f"[{self.name}] Connecting to PyPI API", progress=None
-            )
         
         try:
             # Fetch package metadata
             if ctx.log_display:
                 ctx.log_display.write(f"[{self.name}] Fetching package metadata...")
-
-            if ctx.progress_tracker:
-                ctx.progress_tracker.update_detail(
-                    f"[{self.name}] Fetching metadata for {ctx.package_name}", progress=None
-                )
             
             ctx.package = fetch_package_metadata(ctx.package_name, ctx.requested_version)
             
@@ -51,11 +43,6 @@ class FetchPyPi:
                 ctx.log_display.write(f"[{self.name}] Successfully fetched metadata for {ctx.package_name}{version_info}")
                 if ctx.package.summary:
                     ctx.log_display.write(f"[{self.name}] Summary: {ctx.package.summary}")
-
-            if ctx.progress_tracker:
-                ctx.progress_tracker.update_detail(
-                    f"[{self.name}] Metadata fetched for {ctx.package_name}", progress=1.0
-                )
             
             version_info = f" version {ctx.package.version}" if ctx.package.version else ""
             ctx.findings.append(

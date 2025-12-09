@@ -13,30 +13,20 @@ class RunAnalyses:
 
     def get_status_message(self, ctx: Context) -> str:
         """Generate status message for this task."""
-        return f"Analyzing metadata for {ctx.package_name} module."
+        return "Analyze Package"
 
     def run(self, ctx: Context) -> Context:
         """Run all analyzers and extend findings."""
+        # Status is updated by pipeline before task runs
         analyzers = all_analyzers()
 
         if ctx.log_display:
             ctx.log_display.write(f"[{self.name}] Starting security analysis")
             ctx.log_display.write(f"[{self.name}] Found {len(analyzers)} analyzer(s) to run")
-        if ctx.progress_tracker:
-            ctx.progress_tracker.update_detail(
-                f"[{self.name}] Preparing analyzers", progress=0.0
-            )
 
         for idx, analyzer in enumerate(analyzers, start=1):
             if ctx.log_display:
                 ctx.log_display.write(f"[{self.name}] Running analyzer: {analyzer.name}")
-
-            if ctx.progress_tracker:
-                step_progress = idx / max(len(analyzers), 1)
-                ctx.progress_tracker.update_detail(
-                    f"[{self.name}] Running analyzer: {analyzer.name}",
-                    progress=step_progress,
-                )
 
             findings = analyzer.run(ctx)
             findings_list = list(findings)  # Convert iterable to list
@@ -50,11 +40,6 @@ class RunAnalyses:
 
         if ctx.log_display:
             ctx.log_display.write(f"[{self.name}] Analysis complete. Total findings: {len(ctx.findings)}")
-
-        if ctx.progress_tracker:
-            ctx.progress_tracker.update_detail(
-                f"[{self.name}] Analysis complete", progress=1.0
-            )
 
         return ctx
 

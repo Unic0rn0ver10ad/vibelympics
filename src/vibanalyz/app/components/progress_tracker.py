@@ -29,8 +29,8 @@ class ProgressTracker(Widget):
     detail_transition: float = reactive(1.0)
     spinner_index: int = reactive(0)
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, id: str | None = None, **kwargs) -> None:
+        super().__init__(id=id, **kwargs)
         self._task_names: list[str] = []
         self._prev_top_line = "Waiting to start"
         self._target_top_line = "Waiting to start"
@@ -100,10 +100,16 @@ class ProgressTracker(Widget):
 
     def reset(self) -> None:
         """Reset to initial waiting state."""
-        self._set_top_line("Waiting to start")
-        self._set_detail_line("Ready.", mode="spinner", animate=False)
         self._task_names = []
         self._progress_fraction = 0.0
+        self._prev_top_line = "Waiting to start"
+        self._target_top_line = "Waiting to start"
+        self._prev_detail_line = "Ready."
+        self._target_detail_line = "Ready."
+        self._detail_mode = "spinner"
+        self.top_transition = 1.0
+        self.detail_transition = 1.0
+        self.refresh()
 
     def _format_top_line(self, last_index: int | None, current_index: int | None) -> str:
         """Format top line as [last][current][next] labels."""

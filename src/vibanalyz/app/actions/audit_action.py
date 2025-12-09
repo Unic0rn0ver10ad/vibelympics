@@ -1,8 +1,5 @@
 """Action handler for running audits."""
 
-from vibanalyz.app.components.log_display import LogDisplay
-from vibanalyz.app.components.progress_tracker import ProgressTracker
-from vibanalyz.app.components.status_bar import StatusBar
 from vibanalyz.domain.exceptions import PipelineFatalError
 from vibanalyz.domain.models import AuditResult, Context
 from vibanalyz.services.pipeline import run_pipeline
@@ -11,27 +8,16 @@ from vibanalyz.services.pipeline import run_pipeline
 class AuditAction:
     """Handles audit execution and result display."""
 
-    def __init__(
-        self,
-        log_display: LogDisplay,
-        status_bar: StatusBar,
-        progress_tracker: ProgressTracker,
-    ):
-        """Initialize with UI components."""
-        self.log = log_display
-        self.status = status_bar
-        self.progress = progress_tracker
+    def __init__(self):
+        """Initialize audit action (no UI components injected)."""
+        pass
 
-    async def execute(
-        self, package_name: str, version: str | None = None, repo_source: str = "pypi"
-    ) -> AuditResult:
+    async def execute(self, ctx: Context) -> AuditResult:
         """
         Execute audit and update UI.
         
         Args:
-            package_name: Package name to audit
-            version: Optional version string
-            repo_source: Repository source type (e.g., "pypi", "npm")
+            ctx: Context with package_name, repo_source, log_display
         
         Returns:
             AuditResult from the pipeline
@@ -39,62 +25,58 @@ class AuditAction:
         Raises:
             Exception: If audit fails
         """
-        # Update status
-        self.status.update("Running audit...")
-        
-        # Log audit start
+        log = ctx.log_display
+        version = ctx.requested_version
+        repo_source = ctx.repo_source or "pypi"
+
+        if log:
+            log.set_mode("action")
+
+        # Validate package name
+        if not ctx.package_name or not ctx.package_name.strip():
+            if log:
+                log.write("Please enter a valid package name.")
+            raise ValueError("Package name is required")
+
+        # Log user selection
         version_info = f"=={version}" if version else ""
-        self.log.write(f"Starting audit for package: {package_name}{version_info} (source: {repo_source})")
-        self.log.write("Running pipeline...")
+        if log:
+            log.write(f"User selected: {ctx.package_name}{version_info} (source: {repo_source})")
+
+        # Log audit start
+        if log:
+            log.write(f"Starting audit for package: {ctx.package_name}{version_info} (source: {repo_source})")
+            log.write("Running pipeline...")
 
         try:
-            # Create context with TUI components for real-time updates
-            ctx = Context(
-                package_name=package_name,
-                requested_version=version,
-                repo_source=repo_source,
-                log_display=self.log,
-                status_bar=self.status,
-                progress_tracker=self.progress,
-            )
-
             # Run pipeline
             result = run_pipeline(ctx)
 
             # Display PyPI metadata if available
-            if result.ctx.package:
-                self._display_package_info(result.ctx.package)
+            if log and result.ctx.package:
+                log.set_mode("action")
+                self._display_package_info(result.ctx.package, log)
 
             # Display results
-            self._display_results(result)
-
-            # Update status when done
-            # Check if there were fatal errors (critical findings from pipeline)
-            has_fatal_error = any(
-                f.severity == "critical" and f.source in ["pipeline", "fetch_pypi"]
-                for f in result.ctx.findings
-            )
-            if has_fatal_error:
-                self.status.update("Audit terminated due to fatal error. Waiting for user input.")
-            else:
-                self.status.update("Audit complete. Waiting for user input.")
-
+            if log:
+                log.set_mode("action")
+            self._display_results(result, log)
             return result
 
         except PipelineFatalError as e:
             # PipelineFatalError should be caught by pipeline, but handle if it propagates
-            self.log.write(f"\nFatal error during audit: {e.message}")
-            self.status.update("Audit terminated due to fatal error. Waiting for user input.")
+            if log:
+                log.write(f"\nFatal error during audit: {e.message}")
             raise
         except Exception as e:
-            self.log.write(f"\nError during audit: {e}")
-            import traceback
+            if log:
+                log.write(f"\nError during audit: {e}")
+                import traceback
 
-            self.log.write(traceback.format_exc())
-            self.status.update("Error occurred. Waiting for user input.")
+                log.write(traceback.format_exc())
             raise
 
-    def _display_package_info(self, package) -> None:
+    def _display_package_info(self, package, log_display) -> None:
         """Display package metadata information."""
         lines = []
         lines.append(f"Package: {package.name}")
@@ -134,24 +116,24 @@ class AuditAction:
         if package.release_count is not None:
             lines.append(f"Total Releases: {package.release_count}")
 
-        self.log.write_section("Package Information", lines)
+        log_display.write_section("Package Information", lines)
 
-    def _display_results(self, result: AuditResult) -> None:
+    def _display_results(self, result: AuditResult, log_display) -> None:
         """Display audit results."""
         # Log results
-        self.log.write(f"\nAudit complete!")
-        self.log.write(f"Risk Score: {result.score}")
-        self.log.write(f"Findings: {len(result.ctx.findings)}")
+        log_display.write(f"\nAudit complete!")
+        log_display.write(f"Risk Score: {result.score}")
+        log_display.write(f"Findings: {len(result.ctx.findings)}")
 
         if result.ctx.findings:
-            self.log.write("\nFindings:")
+            log_display.write("\nFindings:")
             for finding in result.ctx.findings:
-                self.log.write(
+                log_display.write(
                     f"  [{finding.severity.upper()}] {finding.source}: {finding.message}"
                 )
 
         if result.pdf_path:
-            self.log.write(f"\nPDF report saved to: {result.pdf_path}")
+            log_display.write(f"\nPDF report saved to: {result.pdf_path}")
 
         # Check for error findings and display them prominently
         error_findings = [
@@ -160,11 +142,11 @@ class AuditAction:
             if f.severity in ["warning", "high", "critical"]
         ]
         if error_findings:
-            self.log.write("\n" + "!" * 50)
-            self.log.write("Important Warnings/Errors:")
+            log_display.write("\n" + "!" * 50)
+            log_display.write("Important Warnings/Errors:")
             for finding in error_findings:
-                self.log.write(
+                log_display.write(
                     f"  [{finding.severity.upper()}] {finding.source}: {finding.message}"
                 )
-            self.log.write("!" * 50)
+            log_display.write("!" * 50)
 

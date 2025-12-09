@@ -2,104 +2,72 @@
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Button, Footer, Header, Input, Label, RichLog, Static
+from textual.widgets import Button, Footer, Header, Input, Label, RichLog
 
 from vibanalyz.app.actions.audit_action import AuditAction
+from vibanalyz.app.actions.copy_log_action import CopyLogAction
+from vibanalyz.app.actions.init_action import InitAction
+from vibanalyz.app.actions.select_repo_action import SelectRepoAction
+from vibanalyz.app.actions.start_over_action import StartOverAction
 from vibanalyz.app.components.input_section import InputSection
 from vibanalyz.app.components.log_display import LogDisplay
-from vibanalyz.app.components.progress_tracker import ProgressTracker
-from vibanalyz.app.components.status_bar import StatusBar
 from vibanalyz.app.state import AppState
+from vibanalyz.domain.models import Context
 
 
 class AuditApp(App):
     """Main audit application TUI."""
 
     CSS = """
+    Screen {
+        layout: vertical;
+    }
+    
     Container {
-        padding: 1 1 0 1;
+        layout: vertical;
+        height: 1fr;
     }
     
-    Vertical {
-        padding: 1;
-        margin-bottom: 0;
+    #controls {
         height: auto;
     }
     
-    Horizontal {
-        height: auto;
-        align: center middle;
-        margin-top: 1;
-        margin-bottom: 0;
+    .control-group {
+        margin-right: 2;
     }
     
-    Horizontal#input-row {
-        margin-bottom: 1;
+    .section-label {
+        text-style: bold;
+        height: 1;
     }
     
-    Horizontal#action-row {
-        margin-top: 0;
+    #log-label {
+        text-style: bold;
+        height: 1;
     }
     
-    Label {
-        margin-bottom: 1;
-        padding-left: 0;
+    #results-log {
+        height: 20;
+        border: solid $primary;
     }
     
     Input {
         width: 30;
-        margin-right: 1;
     }
     
     Button {
-        width: 12;
+        width: auto;
+        min-width: 10;
     }
     
-    Button.repo-button {
+    .repo-button {
         width: 8;
         margin-right: 1;
     }
     
-    Button.repo-button.selected {
+    .repo-button.selected {
         background: $accent;
         text-style: bold;
-    }
-    
-    RichLog {
-        border: solid $primary;
-        height: 1fr;
-        margin-top: 0;
-        margin-bottom: 0;
-        min-height: 10;
-    }
-    
-    Horizontal#log-actions-row {
-        margin-top: 1;
-        margin-bottom: 1;
-    }
-    
-    Static#status-bar {
-        padding: 1;
-        text-align: left;
-        height: 3;
-        margin-top: 0;
-        margin-bottom: 0;
-    }
-
-    ProgressTracker {
-        margin-top: 1;
-        margin-bottom: 1;
-    }
-    
-    Label.repo-label {
-        width: 6;
-        margin-right: 1;
-        text-align: right;
-    }
-    
-    Footer {
-        dock: bottom;
-        height: 1;
     }
     """
 
@@ -110,58 +78,61 @@ class AuditApp(App):
         super().__init__()
         self.package_name = package_name
         self.state = AppState()
-        self.components: dict[str, LogDisplay | StatusBar | InputSection | ProgressTracker] = {}
-        self.actions: dict[str, AuditAction] = {}
+        self.components: dict[str, LogDisplay | InputSection] = {}
+        self.actions: dict[str, object] = {}  # Actions are various types, all independent
         self.selected_repo: str = "pypi"  # Default to PyPI
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header()
-        yield Container(
-            Vertical(
-                Label("Enter the name of a package to check here"),
-                Horizontal(
-                    Label("Repo:", classes="repo-label"),
-                    Button("PyPI", id="repo-pypi-button", classes="repo-button selected"),
-                    Button("NPM", id="repo-npm-button", classes="repo-button"),
-                    id="input-row",
-                ),
-                Horizontal(
-                    Input(placeholder="requests", id="package-input", value=self.package_name or ""),
-                    Button("Run audit", id="audit-button", variant="primary"),
-                    Button("Start over", id="start-over-button"),
-                    id="action-row",
-                ),
-            ),
-            ProgressTracker(id="progress-tracker"),
-            RichLog(id="results-log"),
-            Horizontal(
-                Button("Copy log", id="copy-log-button"),
-                id="log-actions-row",
-            ),
-            Static("Waiting for user input.", id="status-bar"),
-        )
+        
+        with Container():
+            # Log area (moved to top)
+            yield Label("Log", id="log-label")
+            yield RichLog(id="results-log")
+            
+            # Controls row (moved to bottom)
+            with Horizontal(id="controls"):
+                with Vertical(classes="control-group"):
+                    yield Label("Ecosystem", classes="section-label")
+                    with Horizontal():
+                        yield Button("PyPI", id="repo-pypi-button", classes="repo-button selected")
+                        yield Button("NPM", id="repo-npm-button", classes="repo-button")
+                
+                with Vertical(classes="control-group"):
+                    yield Label("Package", classes="section-label")
+                    yield Input(
+                        placeholder="requests",
+                        id="package-input",
+                        value=self.package_name or ""
+                    )
+                
+                with Vertical(classes="control-group"):
+                    yield Label("Actions", classes="section-label")
+                    with Horizontal():
+                        yield Button("Run audit", id="audit-button", variant="primary")
+                        yield Button("Start over", id="start-over-button")
+                        yield Button("Copy log", id="copy-log-button")
+        
         yield Footer()
 
     def on_mount(self) -> None:
         """Called when app is mounted."""
         # Initialize components
         self.components["log"] = LogDisplay(self.query_one("#results-log", RichLog))
-        self.components["status"] = StatusBar(self.query_one("#status-bar", Static))
-        self.components["progress"] = self.query_one("#progress-tracker", ProgressTracker)
         self.components["input"] = InputSection(
             self.query_one("#package-input", Input)
         )
 
         # Initialize actions
-        self.actions["audit"] = AuditAction(
-            self.components["log"],
-            self.components["status"],
-            self.components["progress"],
-        )
+        self.actions["audit"] = AuditAction()
+        self.actions["init"] = InitAction(self.components["log"])
+        self.actions["start_over"] = StartOverAction(self.components["log"], self.components["input"])
+        self.actions["copy_log"] = CopyLogAction(self.components["log"], self)
+        self.actions["select_repo"] = SelectRepoAction(self.components["log"])
 
         # Set initial welcome message
-        self.components["log"].write("Welcome to Vibanalyz MVP 1.0")
+        self.actions["init"].execute()
 
         if self.package_name:
             # Auto-run audit if package name was provided
@@ -208,25 +179,20 @@ class AuditApp(App):
         self, package_name: str, version: str | None = None, repo_source: str | None = None
     ) -> None:
         """Handle audit action."""
-        if not package_name:
-            self.components["log"].write("Please enter a valid package name.")
-            return
-
         # Get repo source if not provided
         if repo_source is None:
             repo_source = self._get_repo_source()
 
-        # Log user selection
-        if version:
-            self.components["log"].write(
-                f"User selected: {package_name}=={version} (source: {repo_source})"
-            )
-        else:
-            self.components["log"].write(f"User selected: {package_name} (source: {repo_source})")
+        ctx = Context(
+            package_name=package_name,
+            requested_version=version,
+            repo_source=repo_source,
+            log_display=self.components["log"],
+        )
 
         try:
             # Execute audit action
-            result = await self.actions["audit"].execute(package_name, version, repo_source)
+            result = await self.actions["audit"].execute(ctx)
 
             # Update state
             self.state.mark_audit_complete(package_name, version, result)
@@ -249,23 +215,11 @@ class AuditApp(App):
         # Reset repo selection to default (PyPI)
         self._update_repo_selection("pypi")
         
-        # Clear the input text box
-        self.components["input"].clear()
-        
-        # Reset status bar to default message
-        self.components["status"].update("Waiting for user input.")
-
-        # Reset progress tracker
-        self.components["progress"].reset()
-
-        # Clear the log display
-        self.components["log"].clear()
-        
         # Reset app state
         self.state.reset()
         
-        # Write welcome message again
-        self.components["log"].write("Welcome to Vibanalyz MVP 1.0")
+        # Clear UI and show welcome message (handled by action)
+        self.actions["start_over"].execute()
         
         # Focus the input field
         self._focus_input()
@@ -275,15 +229,7 @@ class AuditApp(App):
         button_id = event.button.id
         
         if button_id == "copy-log-button":
-            text = self.components["log"].get_text()
-            if text:
-                try:
-                    self.copy_to_clipboard(text)
-                    self.components["log"].write("[log] Copied log to clipboard.")
-                except Exception as e:
-                    self.components["log"].write(f"[log] Failed to copy log: {e}")
-            else:
-                self.components["log"].write("[log] Nothing to copy.")
+            self.actions["copy_log"].execute()
         elif button_id == "audit-button":
             package_name, version = self.components["input"].get_package_info()
             repo_source = self._get_repo_source()
@@ -292,10 +238,10 @@ class AuditApp(App):
             self._start_over()
         elif button_id == "repo-pypi-button":
             self._update_repo_selection("pypi")
-            self.components["log"].write("Repo source changed to: PyPI")
+            self.actions["select_repo"].execute("pypi")
         elif button_id == "repo-npm-button":
             self._update_repo_selection("npm")
-            self.components["log"].write("Repo source changed to: NPM")
+            self.actions["select_repo"].execute("npm")
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle Enter key press in input field."""
@@ -303,4 +249,3 @@ class AuditApp(App):
             package_name, version = self.components["input"].get_package_info()
             repo_source = self._get_repo_source()
             await self._handle_audit(package_name, version, repo_source)
-

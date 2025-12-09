@@ -19,10 +19,11 @@ class FetchNpm:
 
     def get_status_message(self, ctx: Context) -> str:
         """Generate status message for this task."""
-        return f"Contacting NPM repo for {ctx.package_name} module."
+        return "Query Repo"
 
     def run(self, ctx: Context) -> Context:
         """Fetch NPM metadata and update context."""
+        # Status is updated by pipeline before task runs
         # Log start of fetch operation
         if ctx.log_display:
             version_info = f"=={ctx.requested_version}" if ctx.requested_version else ""

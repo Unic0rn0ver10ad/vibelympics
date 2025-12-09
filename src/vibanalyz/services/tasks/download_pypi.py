@@ -25,10 +25,11 @@ class DownloadPyPi:
 
     def get_status_message(self, ctx: Context) -> str:
         """Generate status message for this task."""
-        return f"Downloading {ctx.package_name} package artifact."
+        return "Download Package"
 
     def run(self, ctx: Context) -> Context:
         """Download the package file and update context."""
+        # Status is updated by pipeline before task runs
         if not ctx.package:
             raise PipelineFatalError(
                 message="Cannot download package: metadata not available",

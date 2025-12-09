@@ -30,10 +30,18 @@ pip install -e .
 
 ### Docker
 
+**Important**: The Dockerfile uses **Chainguard Python images** (`cgr.dev/chainguard/python:latest-dev`) for enhanced security. Do not change this to standard Python images.
+
 Build the container image:
 
 ```bash
 docker build -t vibanalyz .
+```
+
+To access generated reports and SBOMs, mount the output directory:
+
+```bash
+docker run --rm -it -v $(pwd)/output:/app/output vibanalyz
 ```
 
 ## Usage

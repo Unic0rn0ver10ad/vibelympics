@@ -37,5 +37,13 @@ Use these guardrails when modifying the codebase. They consolidate the architect
 - Test components by mocking widgets; test actions/tasks/analyzers by mocking dependencies/context.
 - Verify pipelines by ensuring tasks register, appear in the correct chain, emit status messages/logs, and update context/findings as expected.
 
+## Docker & Containerization
+- **CRITICAL**: The Dockerfile **MUST** use Chainguard Python images (`cgr.dev/chainguard/python:latest-dev`). Do not revert to standard Python images (e.g., `python:3.11-slim`).
+- Uses multi-stage build: builder stage compiles packages, runtime stage runs as `nonroot:nonroot` user.
+- Uses `apk` package manager (Wolfi/Alpine-based), not `apt-get`.
+- Creates `/app/output` directory owned by `nonroot` for reports and SBOMs.
+- Sets `WORKDIR /app/output` so `Path.cwd()` resolves to a writable location.
+- When modifying the Dockerfile, maintain security best practices: run as non-root, use minimal base images, keep attack surface small.
+
 ## Roadmap Hints
 - Planned expansions include real PyPI/NPM integrations, repo cloning/downloading, SBOM and vulnerability scanning, dependency graph analysis, richer PDF reporting, additional TUI affordances, and container hardening. Align new work with these directions when choosing implementations.

@@ -64,6 +64,10 @@ def _analyze_sbom_structure(sbom_data: dict, ctx: Context = None) -> dict:
     # roots = refs that are never a child
     roots = all_refs - children if all_refs else set()
     
+    # Initialize metadata fallback variables (used later regardless of dependencies)
+    use_metadata_fallback = False
+    declared_deps_count = 0
+    
     # FIX: When dependencies section is missing/empty, identify root components
     # as library/application type components (exclude file types)
     if not dependencies and components:
@@ -78,8 +82,6 @@ def _analyze_sbom_structure(sbom_data: dict, ctx: Context = None) -> dict:
                     all_refs.add(bom_ref)
         
         # Fallback: Use package metadata requires_dist when dependency graph is empty
-        use_metadata_fallback = False
-        declared_deps_count = 0
         if ctx and ctx.package and ctx.package.requires_dist:
             # Count declared dependencies (filter out empty/None entries)
             declared_deps = [d for d in ctx.package.requires_dist if d]

@@ -21,6 +21,15 @@ CHAINS = {
     ],
     "npm": [
         "fetch_npm",
+        "download_npm",
+        "generate_sbom",
+        "run_analyses",
+        "generate_pdf_report",
+    ],
+    "rust": [
+        "fetch_rust",
+        "download_rust",
+        "generate_sbom",
         "run_analyses",
         "generate_pdf_report",
     ],

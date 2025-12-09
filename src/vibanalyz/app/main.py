@@ -98,6 +98,7 @@ class AuditApp(App):
                     with Horizontal():
                         yield Button("PyPI", id="repo-pypi-button", classes="repo-button selected")
                         yield Button("NPM", id="repo-npm-button", classes="repo-button")
+                        yield Button("Rust", id="repo-rust-button", classes="repo-button")
                 
                 with Vertical(classes="control-group"):
                     yield Label("Package", classes="section-label")
@@ -158,7 +159,24 @@ class AuditApp(App):
 
     def _get_repo_source(self) -> str:
         """Get the currently selected repo source."""
-        return self.selected_repo
+        # Check button states to determine selected repo
+        # Use try/except since query_one() doesn't have can_raise parameter
+        try:
+            rust_button = self.query_one("#repo-rust-button", Button)
+            if "selected" in rust_button.classes:
+                return "rust"
+        except Exception:
+            pass
+        
+        try:
+            npm_button = self.query_one("#repo-npm-button", Button)
+            if "selected" in npm_button.classes:
+                return "npm"
+        except Exception:
+            pass
+        
+        # Default to PyPI (or if PyPI button is selected)
+        return "pypi"
 
     def _update_repo_selection(self, repo: str) -> None:
         """Update the selected repo and refresh button styling."""
@@ -167,13 +185,20 @@ class AuditApp(App):
         # Update button styling to show which is selected
         pypi_button = self.query_one("#repo-pypi-button", Button)
         npm_button = self.query_one("#repo-npm-button", Button)
+        rust_button = self.query_one("#repo-rust-button", Button)
         
+        # Remove selected class from all buttons
+        pypi_button.remove_class("selected")
+        npm_button.remove_class("selected")
+        rust_button.remove_class("selected")
+        
+        # Add selected class to the chosen button
         if repo == "pypi":
             pypi_button.add_class("selected")
-            npm_button.remove_class("selected")
-        else:
+        elif repo == "npm":
             npm_button.add_class("selected")
-            pypi_button.remove_class("selected")
+        elif repo == "rust":
+            rust_button.add_class("selected")
 
     async def _handle_audit(
         self, package_name: str, version: str | None = None, repo_source: str | None = None
@@ -242,6 +267,9 @@ class AuditApp(App):
         elif button_id == "repo-npm-button":
             self._update_repo_selection("npm")
             self.actions["select_repo"].execute("npm")
+        elif button_id == "repo-rust-button":
+            self._update_repo_selection("rust")
+            self.actions["select_repo"].execute("rust")
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle Enter key press in input field."""

@@ -41,7 +41,25 @@ RUN apk add --no-cache \
     openjpeg \
     tiff \
     libwebp \
-    curl
+    curl \
+    nodejs \
+    npm \
+    gcc \
+    openssl-dev
+
+# Install Rust and Cargo using rustup (official Rust installer)
+# Chainguard/Wolfi doesn't have rust/cargo packages, so we use rustup
+# Copy binaries to /usr/local/bin so they're accessible to all users (including nonroot)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal && \
+    /root/.cargo/bin/rustup --version && \
+    /root/.cargo/bin/cargo --version && \
+    # Copy cargo, rustc, and rustup binaries to /usr/local/bin (not symlinks)
+    # This ensures they're accessible to nonroot user
+    cp /root/.cargo/bin/cargo /usr/local/bin/cargo && \
+    cp /root/.cargo/bin/rustc /usr/local/bin/rustc && \
+    cp /root/.cargo/bin/rustup /usr/local/bin/rustup && \
+    # Ensure binaries are executable by all users
+    chmod +x /usr/local/bin/cargo /usr/local/bin/rustc /usr/local/bin/rustup
 
 # Install Syft CLI
 # Use Python's tarfile module to extract since tar package may not be available

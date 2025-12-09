@@ -5,7 +5,7 @@ from typing import Optional
 
 import requests
 
-from vibanalyz.domain.models import PackageMetadata
+from vibanalyz.domain.models import DownloadInfo, PackageMetadata
 
 
 class NPMError(Exception):
@@ -207,3 +207,66 @@ def _parse_npm_response(json_data: dict, package_name: str, requested_version: O
         license=license_info,
         release_count=release_count,
     )
+
+
+def get_download_info(name: str, version: str) -> DownloadInfo:
+    """
+    Get download URL for a specific package version from NPM.
+
+    Args:
+        name: Package name
+        version: Version string to download
+
+    Returns:
+        DownloadInfo with URL, filename, and package_type
+
+    Raises:
+        PackageNotFoundError: If package or version not found
+        NetworkError: For network-related issues
+        NPMError: For other errors
+    """
+    url = f"https://registry.npmjs.org/{name}/{version}"
+
+    try:
+        response = requests.get(url, timeout=10)
+
+        if response.status_code == 404:
+            raise PackageNotFoundError(f"Version '{version}' not found for package '{name}'")
+
+        response.raise_for_status()
+
+        try:
+            data = response.json()
+        except json.JSONDecodeError as e:
+            raise NPMError(f"Invalid JSON response from NPM: {e}")
+
+        # Extract dist.tarball URL from version-specific response
+        dist = data.get("dist", {})
+        tarball_url = dist.get("tarball")
+        
+        if not tarball_url:
+            raise NPMError(f"No tarball URL found for {name}=={version}")
+
+        # Extract filename from tarball URL (format: https://registry.npmjs.org/package/-/package-version.tgz)
+        # Filename is typically the last part of the URL path
+        filename = tarball_url.split("/")[-1]
+        if not filename.endswith(".tgz"):
+            # Fallback: construct filename from package name and version
+            filename = f"{name}-{version}.tgz"
+
+        return DownloadInfo(
+            url=tarball_url,
+            filename=filename,
+            package_type="npm-tarball",
+        )
+
+    except requests.exceptions.Timeout:
+        raise NetworkError("Connection to NPM registry timed out. Please check your internet connection.")
+    except requests.exceptions.ConnectionError as e:
+        raise NetworkError(f"Unable to connect to NPM registry: {e}")
+    except requests.exceptions.RequestException as e:
+        raise NetworkError(f"Network error while fetching from NPM: {e}")
+    except (PackageNotFoundError, NPMError):
+        raise
+    except Exception as e:
+        raise NPMError(f"Unexpected error fetching download info from NPM: {e}")

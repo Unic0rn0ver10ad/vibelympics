@@ -91,7 +91,8 @@ The vibanalyz TUI uses a modular architecture that separates concerns into disti
 
 **Task Chains**:
 - PyPI: `fetch_pypi` → `download_pypi` → `generate_sbom` → `run_analyses` → `generate_pdf_report`
-- NPM: `fetch_npm` → `run_analyses` → `generate_pdf_report`
+- NPM: `fetch_npm` → `download_npm` → `generate_sbom` → `run_analyses` → `generate_pdf_report`
+- Rust: `fetch_rust` → `download_rust` → `generate_sbom` → `run_analyses` → `generate_pdf_report`
 
 ### 6. Task System (`services/tasks/`)
 
@@ -104,8 +105,8 @@ The vibanalyz TUI uses a modular architecture that separates concerns into disti
 - Can raise `PipelineFatalError` to stop pipeline
 
 **Key Tasks**:
-- `fetch_pypi` / `fetch_npm`: Fetch package metadata from registries
-- `download_pypi`: Download package artifact (wheel/tarball)
+- `fetch_pypi` / `fetch_npm` / `fetch_rust`: Fetch package metadata from registries
+- `download_pypi` / `download_npm` / `download_rust`: Download package artifacts
 - `generate_sbom`: Generate CycloneDX JSON SBOM using Syft
 - `run_analyses`: Execute all registered analyzers
 - `generate_pdf_report`: Generate PDF report from log text

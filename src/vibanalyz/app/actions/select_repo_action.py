@@ -15,9 +15,16 @@ class SelectRepoAction:
         Log repo source change.
         
         Args:
-            repo_source: The selected repo source (e.g., "pypi", "npm")
+            repo_source: The selected repo source (e.g., "pypi", "npm", "rust")
         """
         self.log_display.set_mode("action")
-        repo_display_name = "PyPI" if repo_source == "pypi" else "NPM"
+        if repo_source == "pypi":
+            repo_display_name = "PyPI"
+        elif repo_source == "npm":
+            repo_display_name = "NPM"
+        elif repo_source == "rust":
+            repo_display_name = "Rust"
+        else:
+            repo_display_name = repo_source
         self.log_display.write(f"Repo source changed to: {repo_display_name}")
 

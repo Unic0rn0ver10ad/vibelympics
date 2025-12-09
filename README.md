@@ -1,6 +1,6 @@
 # vibanalyz
 
-A package security auditing tool for PyPI and NPM packages.
+A package security auditing tool for PyPI, NPM, and Rust/Crates.io packages.
 
 ## Overview
 
@@ -8,11 +8,11 @@ vibanalyz is a Python CLI/TUI application for auditing software packages from mu
 
 ## Current Features
 
-- **Multi-Repository Support**: Audit packages from PyPI or NPM registries
-- **Real Metadata Fetching**: Live HTTP calls to PyPI JSON API and NPM Registry API
+- **Multi-Repository Support**: Audit packages from PyPI, NPM, or Rust/Crates.io registries
+- **Real Metadata Fetching**: Live HTTP calls to PyPI JSON API, NPM Registry API, and Crates.io API
 - **Textual TUI**: Modern terminal interface with:
   - Package name input with version support (`package==1.0.0`)
-  - Repository source selection (PyPI/NPM)
+  - Repository source selection (PyPI/NPM/Rust)
   - Real-time status updates and detailed logging
   - Error handling with user-friendly messages
 - **Modular Pipeline**: Chain-based task execution system
@@ -97,8 +97,8 @@ docker run --rm -it vibanalyz requests
 
 ### In the TUI
 
-1. Enter a package name (optionally with version: `requests==2.31.0`)
-2. Select the repository source (PyPI or NPM)
+1. Enter a package name (optionally with version: `requests==2.31.0` or `serde==1.0.0`)
+2. Select the repository source (PyPI, NPM, or Rust)
 3. Click "Run audit" or press Enter
 4. View real-time progress and findings in the log
 5. CycloneDX SBOM and PDF report are generated automatically in the artifacts directory
@@ -124,12 +124,14 @@ vibanalyz/
       tasks/                # Pipeline tasks
         fetch_pypi.py       # PyPI metadata fetching
         fetch_npm.py        # NPM metadata fetching
+        fetch_rust.py       # Rust/Crates.io metadata fetching
         run_analyses.py     # Run all analyzers
     analyzers/              # Security analyzer plugins
       metadata.py           # Metadata analyzer
     adapters/               # External service clients
       pypi_client.py        # PyPI Registry HTTP client
       npm_client.py         # NPM Registry HTTP client
+      rust_client.py        # Rust/Crates.io Registry HTTP client
     cli.py                  # CLI entry point
 ```
 
@@ -141,8 +143,9 @@ The audit pipeline uses a chain-based architecture where each repository source 
 
 ```python
 CHAINS = {
-    "pypi": ["fetch_pypi", "run_analyses"],
-    "npm": ["fetch_npm", "run_analyses"],
+    "pypi": ["fetch_pypi", "download_pypi", "generate_sbom", "run_analyses", "generate_pdf_report"],
+    "npm": ["fetch_npm", "download_npm", "generate_sbom", "run_analyses", "generate_pdf_report"],
+    "rust": ["fetch_rust", "download_rust", "generate_sbom", "run_analyses", "generate_pdf_report"],
 }
 ```
 

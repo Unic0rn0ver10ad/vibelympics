@@ -79,6 +79,7 @@ class Context:
     vulns: Optional[VulnReport] = None
     findings: list[Finding] = field(default_factory=list)
     log_display: Optional["LogDisplay"] = None
+    report_path: Optional[str] = None
 
 
 @dataclass

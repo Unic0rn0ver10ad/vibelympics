@@ -12,6 +12,7 @@ from vibanalyz.adapters.syft_client import (
 from vibanalyz.domain.exceptions import PipelineFatalError
 from vibanalyz.domain.models import Context, Finding, Sbom
 from vibanalyz.domain.protocols import Task
+from vibanalyz.services.artifacts import get_artifacts_dir, get_host_hint
 from vibanalyz.services.tasks import register
 
 
@@ -163,9 +164,8 @@ class GenerateSbom:
             
             sbom_data = generate_sbom(ctx.download_info.local_path)
             
-            # Save SBOM to JSON file (same directory as PDF reports)
-            output_dir = Path.cwd()
-            output_dir.mkdir(parents=True, exist_ok=True)
+            # Save SBOM to JSON file (shared artifacts directory)
+            output_dir = get_artifacts_dir()
             
             # Generate filename matching PDF report pattern
             version_suffix = ""
@@ -196,6 +196,11 @@ class GenerateSbom:
                     ctx.log_display.write(
                         f"[{self.name}] SBOM saved to: {sbom_file_path_str}"
                     )
+                    host_hint = get_host_hint(output_dir)
+                    if host_hint:
+                        ctx.log_display.write(
+                            f"[{self.name}] Host path hint: {host_hint}"
+                        )
                 
                 # Add separator section
                 ctx.log_display.write_section("SBOM Information", [])

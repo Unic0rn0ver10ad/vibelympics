@@ -3,7 +3,7 @@
 from vibanalyz.domain.exceptions import PipelineFatalError
 from vibanalyz.domain.models import AuditResult, Context, Finding
 from vibanalyz.domain.scoring import compute_risk_score
-from vibanalyz.services.reporting import write_pdf_report
+from vibanalyz.services.artifacts import get_artifacts_dir
 from vibanalyz.services.tasks import get_task
 
 # Define task chains for different repo sources
@@ -14,10 +14,12 @@ CHAINS = {
         "download_pypi",
         "generate_sbom",
         "run_analyses",
+        "generate_pdf_report",
     ],
     "npm": [
         "fetch_npm",
         "run_analyses",
+        "generate_pdf_report",
     ],
 }
 
@@ -175,13 +177,10 @@ def run_pipeline(ctx: Context) -> AuditResult:
             result.score = compute_risk_score(result)
             return result
 
-    # Compute score
+    # Compute score and hydrate result (PDF now generated in dedicated task)
     result = AuditResult(ctx=ctx, score=0)
     result.score = compute_risk_score(result)
-    
-    # Generate PDF report
-    pdf_path = write_pdf_report(result)
-    result.pdf_path = str(pdf_path)
-    
+    result.pdf_path = ctx.report_path
+
     return result
 

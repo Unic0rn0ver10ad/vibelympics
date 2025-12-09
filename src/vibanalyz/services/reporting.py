@@ -6,6 +6,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 
 from vibanalyz.domain.models import AuditResult
+from vibanalyz.services.artifacts import get_artifacts_dir
 
 
 def render_text_report(result: AuditResult) -> str:
@@ -48,7 +49,7 @@ def write_pdf_report(result: AuditResult, output_dir: Path | str | None = None) 
         Absolute path to the created PDF file
     """
     if output_dir is None:
-        output_dir = Path.cwd()
+        output_dir = get_artifacts_dir()
     elif isinstance(output_dir, str):
         output_dir = Path(output_dir)
     

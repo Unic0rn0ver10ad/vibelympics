@@ -38,11 +38,19 @@ Build the container image:
 docker build -t vibanalyz .
 ```
 
-To access generated reports and SBOMs, mount the output directory:
+Artifacts (PDF report and CycloneDX SBOM) are written to an artifacts directory inside the container. Bind-mount that directory to your host to retrieve files after an audit:
 
-```bash
-docker run --rm -it -v $(pwd)/output:/app/output vibanalyz
-```
+- Default path (`/artifacts`) with Windows PowerShell:
+  ```powershell
+  docker run --rm -it -v C:\Users\<you>\vibanalyz-artifacts:/artifacts vibanalyz
+  ```
+- Custom container path with `ARTIFACTS_DIR`:
+  ```powershell
+  docker run --rm -it -e ARTIFACTS_DIR=/my-artifacts -v C:\Users\<you>\vibanalyz-artifacts:/my-artifacts vibanalyz
+  ```
+- Optional: set `ARTIFACTS_HOST_PATH` to print your host mount path in logs.
+
+The TUI logs print the container path for each artifact and, when `ARTIFACTS_DIR` or `ARTIFACTS_HOST_PATH` is set, a host-friendly hint to help you locate the files.
 
 ## Usage
 

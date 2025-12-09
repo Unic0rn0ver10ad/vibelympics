@@ -1,5 +1,7 @@
 """Task to fetch PyPI metadata."""
 
+import asyncio
+
 from vibanalyz.adapters.pypi_client import (
     NetworkError,
     PackageNotFoundError,
@@ -21,28 +23,37 @@ class FetchPyPi:
         """Generate status message for this task."""
         return "Query Repo"
 
-    def run(self, ctx: Context) -> Context:
+    async def run(self, ctx: Context) -> Context:
         """Fetch PyPI metadata and update context."""
         # Status is updated by pipeline before task runs
         # Log start of fetch operation
         if ctx.log_display:
             version_info = f"=={ctx.requested_version}" if ctx.requested_version else ""
             ctx.log_display.write(f"[{self.name}] Starting fetch for {ctx.package_name}{version_info}")
+            await asyncio.sleep(0)
             ctx.log_display.write(f"[{self.name}] Connecting to PyPI API...")
+            await asyncio.sleep(0)
         
         try:
-            # Fetch package metadata
+            # Fetch package metadata (run blocking I/O in executor)
             if ctx.log_display:
                 ctx.log_display.write(f"[{self.name}] Fetching package metadata...")
+                await asyncio.sleep(0)
             
-            ctx.package = fetch_package_metadata(ctx.package_name, ctx.requested_version)
+            # Run blocking network call in executor to avoid blocking event loop
+            loop = asyncio.get_event_loop()
+            ctx.package = await loop.run_in_executor(
+                None, fetch_package_metadata, ctx.package_name, ctx.requested_version
+            )
             
             # Success - log and add finding
             if ctx.log_display:
                 version_info = f" version {ctx.package.version}" if ctx.package.version else ""
                 ctx.log_display.write(f"[{self.name}] Successfully fetched metadata for {ctx.package_name}{version_info}")
+                await asyncio.sleep(0)
                 if ctx.package.summary:
                     ctx.log_display.write(f"[{self.name}] Summary: {ctx.package.summary}")
+                    await asyncio.sleep(0)
             
             version_info = f" version {ctx.package.version}" if ctx.package.version else ""
             ctx.findings.append(
@@ -55,7 +66,8 @@ class FetchPyPi:
         except PackageNotFoundError as e:
             # Package or version not found - fatal error
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: Package or version not found: {str(e)}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: Package or version not found: {str(e)}")
+                await asyncio.sleep(0)
             
             ctx.findings.append(
                 Finding(
@@ -72,7 +84,8 @@ class FetchPyPi:
         except NetworkError as e:
             # Network connection issues
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: Network connection failed: {str(e)}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: Network connection failed: {str(e)}")
+                await asyncio.sleep(0)
             
             ctx.findings.append(
                 Finding(
@@ -84,7 +97,8 @@ class FetchPyPi:
         except PyPIError as e:
             # Other PyPI errors
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: PyPI API error: {str(e)}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: PyPI API error: {str(e)}")
+                await asyncio.sleep(0)
             
             ctx.findings.append(
                 Finding(

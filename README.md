@@ -17,6 +17,7 @@ vibanalyz is a Python CLI/TUI application for auditing software packages from mu
   - Error handling with user-friendly messages
 - **Modular Pipeline**: Chain-based task execution system
 - **Analyzer Plugin System**: Extensible security analysis framework
+- **SBOM Generation**: CycloneDX JSON format SBOMs using Syft (requires Syft >=1.38.x)
 - **PDF Report Generation**: Automated audit reports using ReportLab
 - **Docker Support**: Containerized deployment with Chainguard Python base image
 
@@ -40,17 +41,29 @@ docker build -t vibanalyz .
 
 Artifacts (PDF report and CycloneDX SBOM) are written to an artifacts directory inside the container. Bind-mount that directory to your host to retrieve files after an audit:
 
-- Default path (`/artifacts`) with Windows PowerShell:
+- Default path (`/artifacts`) with Windows PowerShell (no username editing needed):
   ```powershell
-  docker run --rm -it -v C:\Users\<you>\vibanalyz-artifacts:/artifacts vibanalyz
+  # Create the host folder if needed
+  New-Item -ItemType Directory -Force "$env:USERPROFILE\vibanalyz-artifacts" | Out-Null
+
+  docker run --rm -it `
+    -v "$env:USERPROFILE\vibanalyz-artifacts:/artifacts" `
+    vibanalyz
   ```
 - Custom container path with `ARTIFACTS_DIR`:
   ```powershell
-  docker run --rm -it -e ARTIFACTS_DIR=/my-artifacts -v C:\Users\<you>\vibanalyz-artifacts:/my-artifacts vibanalyz
+  New-Item -ItemType Directory -Force "$env:USERPROFILE\vibanalyz-artifacts" | Out-Null
+
+  docker run --rm -it `
+    -e ARTIFACTS_DIR=/my-artifacts `
+    -v "$env:USERPROFILE\vibanalyz-artifacts:/my-artifacts" `
+    vibanalyz
   ```
 - Optional: set `ARTIFACTS_HOST_PATH` to print your host mount path in logs.
 
 The TUI logs print the container path for each artifact and, when `ARTIFACTS_DIR` or `ARTIFACTS_HOST_PATH` is set, a host-friendly hint to help you locate the files.
+
+**Note on SBOM Format**: SBOMs are generated in CycloneDX JSON format (spec version 1.6) using Syft. Dependency metrics (direct/transitive counts, depth) are derived from the CycloneDX dependency graph when available. When scanning wheel files, Syft may not populate the dependency graph (dependencies section may be empty); in such cases, root components are identified as library/application type components. Requires Syft >=1.38.x for optimal Python dependency detection.
 
 ## Usage
 
@@ -88,7 +101,7 @@ docker run --rm -it vibanalyz requests
 2. Select the repository source (PyPI or NPM)
 3. Click "Run audit" or press Enter
 4. View real-time progress and findings in the log
-5. PDF report is generated automatically
+5. CycloneDX SBOM and PDF report are generated automatically in the artifacts directory
 
 ## Project Structure
 

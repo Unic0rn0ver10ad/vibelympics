@@ -19,9 +19,10 @@ The vibanalyz TUI uses a modular architecture that separates concerns into disti
 - Components provide simple, focused methods (e.g., `write()`, `update()`, `clear()`)
 
 **Example Components**:
-- `LogDisplay` - Wraps RichLog, provides `write()`, `clear()`, `write_section()`
-- `StatusBar` - Wraps Static, provides `update()`
+- `LogDisplay` - Wraps RichLog, provides `write()`, `clear()`, `write_section()`, `get_text()`, `write_task_section()`
+- `StatusBar` - Wraps Static, provides `update()`, `update_status()`
 - `InputSection` - Wraps Input, provides `get_value()`, `set_value()`, `get_package_info()`
+- `ProgressTracker` - Custom widget showing pipeline progress with task names
 
 ### 2. Actions Layer (`app/actions/`)
 
@@ -69,6 +70,90 @@ The vibanalyz TUI uses a modular architecture that separates concerns into disti
 - Main app is the ONLY place that knows about all components and actions
 - Main app routes events but doesn't contain business logic
 - Main app updates UI visibility/enablement based on state
+
+## Pipeline and Services Architecture
+
+### 5. Pipeline System (`services/pipeline.py`)
+
+**Purpose**: Orchestrate task execution in chains based on repository source.
+
+**Pattern**: Chain-based task execution where:
+- Tasks are registered in a central registry
+- Task chains are defined per repository source (PyPI, NPM)
+- Pipeline orchestrates task execution and status updates
+- Context object carries data between tasks
+
+**Key Components**:
+- `CHAINS` dictionary: Maps repo sources to task name lists
+- `run_pipeline()`: Executes tasks in sequence, handles errors
+- `get_task_chain()`: Resolves task chain for a repo source
+- `get_task_status_messages()`: Gets previous/current/next status for status bar
+
+**Task Chains**:
+- PyPI: `fetch_pypi` → `download_pypi` → `generate_sbom` → `run_analyses` → `generate_pdf_report`
+- NPM: `fetch_npm` → `run_analyses` → `generate_pdf_report`
+
+### 6. Task System (`services/tasks/`)
+
+**Purpose**: Individual pipeline tasks that execute specific operations.
+
+**Pattern**: Each task:
+- Implements the `Task` protocol (`name`, `get_status_message()`, `run()`)
+- Auto-registers via `register()` call at module import
+- Reads from and writes to `Context` object
+- Can raise `PipelineFatalError` to stop pipeline
+
+**Key Tasks**:
+- `fetch_pypi` / `fetch_npm`: Fetch package metadata from registries
+- `download_pypi`: Download package artifact (wheel/tarball)
+- `generate_sbom`: Generate CycloneDX JSON SBOM using Syft
+- `run_analyses`: Execute all registered analyzers
+- `generate_pdf_report`: Generate PDF report from log text
+
+**Task Registration**: Tasks auto-register when their module is imported in `services/tasks/__init__.py`
+
+### 7. Artifacts System (`services/artifacts.py`)
+
+**Purpose**: Manage artifact output directory for PDF reports and SBOMs.
+
+**Pattern**: Centralized directory resolution with environment variable support:
+- Default: `/artifacts` (for Docker bind mounts)
+- Override: `ARTIFACTS_DIR` environment variable
+- Host hint: `ARTIFACTS_HOST_PATH` for user-friendly logging
+
+**Key Functions**:
+- `get_artifacts_dir()`: Resolves and creates artifacts directory
+- `get_host_hint()`: Returns host-friendly path hint for logs
+
+### 8. Reporting System
+
+**PDF Generation** (`services/pdf_report.py`):
+- `write_pdf_from_text()`: Generates PDF from plain text log content
+- Uses ReportLab for PDF creation
+- Writes to artifacts directory
+
+**SBOM Generation** (`services/tasks/generate_sbom.py`):
+- Uses Syft CLI to generate CycloneDX JSON format SBOMs
+- Extracts wheel files to temp directories for scanning
+- Parses CycloneDX dependency graph for metrics
+- Falls back to package metadata (`requires_dist`) when dependency graph is empty
+- Analyzes SBOM structure: components, dependencies, depth, licenses
+
+### 9. Context Object (`domain/models.py`)
+
+**Purpose**: Shared data structure passed through pipeline tasks.
+
+**Key Fields**:
+- Package info: `package_name`, `package`, `download_info`
+- Repository: `repo_source`, `repo`
+- Analysis results: `sbom`, `vulns`, `findings`
+- UI components: `log_display`, `status_bar`, `progress_tracker`
+- Output paths: `report_path` (PDF), `sbom.file_path` (SBOM)
+
+**Principles**:
+- Tasks read from and write to context
+- Context carries UI components for logging/status updates
+- Context is immutable-friendly (tasks return new/updated context)
 
 ## Adding New Features
 
@@ -398,6 +483,30 @@ class SomeAction:
 
 **Solution**: Pass only needed components to actions.
 
+## Integration Between TUI and Pipeline
+
+The TUI and Pipeline layers are separate but integrated:
+
+**TUI Layer** (Actions/Components):
+- `AuditAction` creates `Context` with UI components
+- Calls `run_pipeline(ctx)` to execute audit
+- Pipeline tasks use `ctx.log_display` and `ctx.status_bar` for UI updates
+- Pipeline returns `AuditResult` with findings and artifact paths
+
+**Pipeline Layer** (Tasks/Services):
+- Tasks receive `Context` with UI components
+- Tasks write to `ctx.log_display` for detailed logging
+- Pipeline orchestrator updates `ctx.status_bar` before each task
+- Tasks write artifacts (PDF, SBOM) to artifacts directory
+- Tasks update `Context` fields (e.g., `ctx.sbom`, `ctx.report_path`)
+
+**Key Integration Points**:
+- `Context` object bridges TUI and Pipeline
+- UI components are optional in context (tasks check `if ctx.log_display:`)
+- Artifacts directory is resolved via `get_artifacts_dir()` helper
+- Status updates flow: Pipeline → StatusBar (via context)
+- Log messages flow: Tasks → LogDisplay (via context)
+
 ## Summary
 
 The key to maintaining isolation is:
@@ -406,13 +515,30 @@ The key to maintaining isolation is:
 2. **Actions** = Controller layer (business logic, isolated)
 3. **State** = Model layer (application state)
 4. **Main App** = Orchestrator (routes events, coordinates)
+5. **Pipeline** = Task orchestration (chain-based execution)
+6. **Tasks** = Individual pipeline operations (isolated, auto-registered)
+7. **Services** = Shared utilities (artifacts, reporting)
 
-Each new feature should:
+### Adding New Features
+
+**TUI Features** (buttons, UI interactions):
 - Add a new action file
 - Register in main app
 - Route events in main app
 - NOT modify existing actions
 - NOT create dependencies between actions
+
+**Pipeline Features** (new analysis steps):
+- Create new task file implementing `Task` protocol
+- Register task via `register()` call
+- Import task module in `services/tasks/__init__.py`
+- Add task name to appropriate chain in `CHAINS` dictionary
+- Task reads from/writes to `Context` object
+
+**Artifact Output**:
+- Use `get_artifacts_dir()` from `services.artifacts` for output paths
+- Log container path and host hint using `get_host_hint()`
+- Write to artifacts directory (default `/artifacts`, configurable via `ARTIFACTS_DIR`)
 
 This architecture ensures that features can be added, modified, or removed without affecting other features.
 

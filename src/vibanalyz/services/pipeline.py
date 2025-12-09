@@ -1,5 +1,8 @@
 """Main audit pipeline."""
 
+import asyncio
+import time
+
 from vibanalyz.domain.exceptions import PipelineFatalError
 from vibanalyz.domain.models import AuditResult, Context, Finding
 from vibanalyz.domain.scoring import compute_risk_score
@@ -105,9 +108,9 @@ def get_task_status_messages(
         return ("", current_status, "")
 
 
-def run_pipeline(ctx: Context) -> AuditResult:
+async def run_pipeline(ctx: Context) -> AuditResult:
     """
-    Run the audit pipeline.
+    Run the audit pipeline asynchronously.
     
     Args:
         ctx: Initial context with package_name and repo_source set
@@ -153,17 +156,54 @@ def run_pipeline(ctx: Context) -> AuditResult:
         )
         raise ValueError(error_msg)
     
+    # Execute all tasks in sequence with timing
+    # Each task is timed individually and displays its completion time
     for index, task in enumerate(tasks):
+        task_start_time = time.perf_counter()
+        status_msg = task.get_status_message(ctx)
+        
         try:
             # Write task section header before running the task
             if ctx.log_display:
                 ctx.log_display.set_mode("task")
-                status_msg = task.get_status_message(ctx)
                 ctx.log_display.write_task_section(status_msg)
+                # Yield control to event loop after log write
+                await asyncio.sleep(0)
 
             # Run task (task writes to log_display, status already updated by pipeline)
-            ctx = task.run(ctx)
+            # Support both async and sync tasks
+            result = task.run(ctx)
+            if asyncio.iscoroutine(result):
+                ctx = await result
+            else:
+                ctx = result
+            
+            # Calculate task execution time
+            task_end_time = time.perf_counter()
+            task_duration = task_end_time - task_start_time
+            
+            # Log task completion with timing (all tasks are timed)
+            if ctx.log_display:
+                ctx.log_display.set_mode("task")
+                ctx.log_display.write(
+                    f"{status_msg} completed successfully in {task_duration:.1f} seconds"
+                )
+                await asyncio.sleep(0)
+            
+            # Yield control after each task to allow UI updates
+            await asyncio.sleep(0)
         except PipelineFatalError as e:
+            # Calculate task execution time even on failure
+            task_end_time = time.perf_counter()
+            task_duration = task_end_time - task_start_time
+            
+            # Log task failure with timing (in red)
+            if ctx.log_display:
+                ctx.log_display.write_error(
+                    f"{status_msg} failed after {task_duration:.1f} seconds"
+                )
+                await asyncio.sleep(0)
+            
             # Fatal error - stop pipeline execution
             ctx.findings.append(
                 Finding(

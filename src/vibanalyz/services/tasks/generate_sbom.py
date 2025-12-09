@@ -1,7 +1,8 @@
 """Task to generate SBOM using Syft."""
 
+import asyncio
 import json
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 
 from vibanalyz.adapters.syft_client import (
@@ -16,89 +17,137 @@ from vibanalyz.services.artifacts import get_artifacts_dir, get_host_hint
 from vibanalyz.services.tasks import register
 
 
-def _analyze_sbom_structure(sbom_data: dict) -> dict:
+def _analyze_sbom_structure(sbom_data: dict, ctx: Context = None) -> dict:
     """
-    Analyze SBOM structure and return summary metrics.
+    Analyze SBOM structure and return summary metrics using CycloneDX data.
     
     Args:
-        sbom_data: The SBOM data dictionary from Syft
-        
-    Returns:
-        Dictionary with analysis metrics
+        sbom_data: CycloneDX SBOM dictionary
+        ctx: Optional context for fallback to package metadata
     """
-    artifacts = sbom_data.get("artifacts", [])
-    relationships = sbom_data.get("artifactRelationships", [])
-    
-    # Basic counts
-    total_components = len(artifacts) if artifacts else 0
-    
-    # Component types breakdown
-    type_counts = defaultdict(int)
+    components = sbom_data.get("components", []) or []
+    dependencies = sbom_data.get("dependencies", []) or []
+
+    # Build lookups
+    component_types = defaultdict(int)
     licenses = set()
-    for artifact in artifacts:
-        artifact_type = artifact.get("type", "unknown")
-        type_counts[artifact_type] += 1
+    component_by_ref = {}  # bom-ref -> component
+    for comp in components:
+        bom_ref = comp.get("bom-ref")
+        if bom_ref:
+            component_by_ref[bom_ref] = comp
+        comp_type = comp.get("type", "unknown")
+        component_types[comp_type] += 1
+        for lic in comp.get("licenses", []) or []:
+            if isinstance(lic, dict):
+                lic_id = lic.get("license", {}).get("id") or lic.get("license", {}).get("name")
+                if lic_id:
+                    licenses.add(lic_id)
+            elif isinstance(lic, str):
+                licenses.add(lic)
+
+    # Build dependency graph from CycloneDX dependencies array
+    # deps_map: parent_ref -> list(child_refs)
+    deps_map = defaultdict(list)
+    all_refs = set()
+    children = set()
+    for dep in dependencies:
+        ref = dep.get("ref")
+        if not ref:
+            continue
+        all_refs.add(ref)
+        for child in dep.get("dependsOn", []) or []:
+            deps_map[ref].append(child)
+            children.add(child)
+            all_refs.add(child)
+
+    # roots = refs that are never a child
+    roots = all_refs - children if all_refs else set()
+    
+    # FIX: When dependencies section is missing/empty, identify root components
+    # as library/application type components (exclude file types)
+    if not dependencies and components:
+        # Find library/application components that aren't children
+        for comp in components:
+            bom_ref = comp.get("bom-ref")
+            comp_type = comp.get("type", "").lower()
+            # Only consider library/application types as potential roots
+            if bom_ref and comp_type in ("library", "application", "framework"):
+                if bom_ref not in children:
+                    roots.add(bom_ref)
+                    all_refs.add(bom_ref)
         
-        # Collect licenses
-        artifact_licenses = artifact.get("licenses", [])
-        if artifact_licenses:
-            for license_info in artifact_licenses:
-                if isinstance(license_info, str):
-                    licenses.add(license_info)
-                elif isinstance(license_info, dict):
-                    licenses.add(license_info.get("value", "unknown"))
-    
-    # Build dependency graph
-    # Map: child_id -> list of parent_ids
-    child_to_parents = defaultdict(list)
-    # Map: parent_id -> list of child_ids
-    parent_to_children = defaultdict(list)
-    
-    for rel in relationships:
-        parent_id = rel.get("parent")
-        child_id = rel.get("child")
-        rel_type = rel.get("type", "")
+        # Fallback: Use package metadata requires_dist when dependency graph is empty
+        use_metadata_fallback = False
+        declared_deps_count = 0
+        if ctx and ctx.package and ctx.package.requires_dist:
+            # Count declared dependencies (filter out empty/None entries)
+            declared_deps = [d for d in ctx.package.requires_dist if d]
+            declared_deps_count = len(declared_deps)
+            if declared_deps_count > 0:
+                # Use metadata fallback when we have declared deps but no graph
+                use_metadata_fallback = True
+
+    # BFS to compute depth and collect direct/transitive sets
+    def bfs_depth(start: str) -> tuple[int, set[str], set[str]]:
+        direct = set(deps_map.get(start, []))
+        if not direct:
+            # No dependencies - depth is 0
+            return 0, direct, set()
         
-        if parent_id and child_id and rel_type == "dependsOn":
-            child_to_parents[child_id].append(parent_id)
-            parent_to_children[parent_id].append(child_id)
-    
-    # Find root components (no incoming relationships)
-    all_component_ids = {artifact.get("id") for artifact in artifacts if artifact.get("id")}
-    components_with_parents = set(child_to_parents.keys())
-    root_components = all_component_ids - components_with_parents
-    
-    # Calculate dependency depth using BFS from root components
+        seen = {start}
+        transitive = set()
+        # Start with depth 1 for direct dependencies
+        max_depth_local = 1
+        queue = deque([(child, 2) for child in direct])
+        seen.update(direct)
+        while queue:
+            node, depth = queue.popleft()
+            max_depth_local = max(max_depth_local, depth)
+            for nxt in deps_map.get(node, []):
+                if nxt not in seen:
+                    seen.add(nxt)
+                    transitive.add(nxt)
+                    queue.append((nxt, depth + 1))
+        return max_depth_local, direct, transitive
+
     max_depth = 0
-    if root_components and parent_to_children:
-        for root_id in root_components:
-            depth = _calculate_max_depth(root_id, parent_to_children)
-            max_depth = max(max_depth, depth)
-    
-    # Count direct vs transitive dependencies
-    # Direct: components that are children of root components
     direct_deps = set()
-    for root_id in root_components:
-        direct_deps.update(parent_to_children.get(root_id, []))
+    transitive_deps = set()
     
-    # Transitive: all other components with parents
-    transitive_deps = components_with_parents - direct_deps
-    
-    # Relationship types breakdown
-    rel_type_counts = defaultdict(int)
-    for rel in relationships:
-        rel_type = rel.get("type", "unknown")
-        rel_type_counts[rel_type] += 1
-    
+    # If using metadata fallback, populate metrics from declared dependencies
+    if use_metadata_fallback:
+        # Direct dependencies = count of declared dependencies
+        # We can't know transitive without resolution, so set to 0
+        # Depth = 1 if there are any declared dependencies (they're direct, but we don't know their depth)
+        max_depth = 1 if declared_deps_count > 0 else 0
+    else:
+        # Use CycloneDX dependency graph
+        for root in roots or []:
+            depth, direct, transitive = bfs_depth(root)
+            max_depth = max(max_depth, depth)
+            direct_deps.update(direct)
+            transitive_deps.update(transitive)
+
+    total_components = len(components)
+
+    # Use metadata fallback counts if applicable
+    if use_metadata_fallback:
+        direct_deps_count = declared_deps_count
+        transitive_deps_count = 0  # Unknown without resolution
+    else:
+        direct_deps_count = len(direct_deps)
+        transitive_deps_count = len(transitive_deps)
+
     return {
         "total_components": total_components,
         "max_depth": max_depth,
-        "direct_dependencies": len(direct_deps),
-        "transitive_dependencies": len(transitive_deps),
-        "root_components": len(root_components),
-        "component_types": dict(type_counts),
+        "direct_dependencies": direct_deps_count,
+        "transitive_dependencies": transitive_deps_count,
+        "root_components": len(roots),
+        "component_types": dict(component_types),
         "unique_licenses": len(licenses),
-        "relationship_types": dict(rel_type_counts),
+        "relationship_types": {"cyclonedx_dependencies": len(dependencies)},
     }
 
 
@@ -143,7 +192,7 @@ class GenerateSbom:
         """Generate status message for this task."""
         return "Generate SBOM"
 
-    def run(self, ctx: Context) -> Context:
+    async def run(self, ctx: Context) -> Context:
         """Generate SBOM and update context."""
         # Status is updated by pipeline before task runs
         if not ctx.download_info or not ctx.download_info.local_path:
@@ -156,13 +205,19 @@ class GenerateSbom:
             ctx.log_display.write(
                 f"[{self.name}] Generating SBOM for {ctx.download_info.filename}"
             )
+            await asyncio.sleep(0)
 
         try:
             # Run Syft to generate SBOM
             if ctx.log_display:
                 ctx.log_display.write(f"[{self.name}] Running Syft...")
+                await asyncio.sleep(0)
             
-            sbom_data = generate_sbom(ctx.download_info.local_path)
+            # Run blocking subprocess call in executor
+            loop = asyncio.get_event_loop()
+            sbom_data = await loop.run_in_executor(
+                None, generate_sbom, ctx.download_info.local_path
+            )
             
             # Save SBOM to JSON file (shared artifacts directory)
             output_dir = get_artifacts_dir()
@@ -174,57 +229,77 @@ class GenerateSbom:
             filename = f"vibanalyz-{ctx.package_name}{version_suffix}-sbom.json"
             sbom_file_path = output_dir / filename
             
-            # Write SBOM to file
+            # Write SBOM to file (run blocking I/O in executor)
+            loop = asyncio.get_event_loop()
+            def _write_sbom_file():
+                try:
+                    with open(sbom_file_path, "w", encoding="utf-8") as f:
+                        json.dump(sbom_data, f, indent=2)
+                    return str(sbom_file_path.resolve())
+                except Exception as e:
+                    if ctx.log_display:
+                        # Note: Can't await here in sync function, will handle after
+                        pass
+                    raise e
+            
             try:
-                with open(sbom_file_path, "w", encoding="utf-8") as f:
-                    json.dump(sbom_data, f, indent=2)
-                sbom_file_path_str = str(sbom_file_path.resolve())
+                sbom_file_path_str = await loop.run_in_executor(None, _write_sbom_file)
             except Exception as e:
                 sbom_file_path_str = None
                 if ctx.log_display:
                     ctx.log_display.write(
                         f"[{self.name}] WARNING: Failed to save SBOM file: {e}"
                     )
+                    await asyncio.sleep(0)
             
             # Store SBOM in context with file path
             ctx.sbom = Sbom(raw=sbom_data, file_path=sbom_file_path_str)
 
             if ctx.log_display:
                 ctx.log_display.write(f"[{self.name}] SBOM generated successfully")
+                await asyncio.sleep(0)
                 
                 if sbom_file_path_str:
                     ctx.log_display.write(
                         f"[{self.name}] SBOM saved to: {sbom_file_path_str}"
                     )
+                    await asyncio.sleep(0)
                     host_hint = get_host_hint(output_dir)
                     if host_hint:
                         ctx.log_display.write(
                             f"[{self.name}] Host path hint: {host_hint}"
                         )
+                        await asyncio.sleep(0)
                 
                 # Add separator section
                 ctx.log_display.write_section("SBOM Information", [])
+                await asyncio.sleep(0)
                 
                 # Analyze and display SBOM summary
                 if isinstance(sbom_data, dict):
-                    analysis = _analyze_sbom_structure(sbom_data)
+                    analysis = _analyze_sbom_structure(sbom_data, ctx)
                     
                     # Display summary metrics
                     ctx.log_display.write(
                         f"[{self.name}] Total Components: {analysis['total_components']}"
                     )
+                    await asyncio.sleep(0)
                     ctx.log_display.write(
                         f"[{self.name}] Dependency Depth: {analysis['max_depth']} level(s)"
                     )
+                    await asyncio.sleep(0)
                     ctx.log_display.write(
                         f"[{self.name}] Direct Dependencies: {analysis['direct_dependencies']}"
                     )
+                    await asyncio.sleep(0)
                     ctx.log_display.write(
                         f"[{self.name}] Transitive Dependencies: {analysis['transitive_dependencies']}"
                     )
+                    await asyncio.sleep(0)
                     ctx.log_display.write(
                         f"[{self.name}] Root Components: {analysis['root_components']}"
                     )
+                    await asyncio.sleep(0)
                     
                     # Component types
                     if analysis['component_types']:
@@ -234,28 +309,38 @@ class GenerateSbom:
                         ctx.log_display.write(
                             f"[{self.name}] Component Types: {type_summary}"
                         )
+                        await asyncio.sleep(0)
                     
                     # Licenses
                     if analysis['unique_licenses'] > 0:
                         ctx.log_display.write(
                             f"[{self.name}] Unique Licenses: {analysis['unique_licenses']}"
                         )
+                        await asyncio.sleep(0)
                     
-                    # Schema version
-                    schema = sbom_data.get("schema", {})
-                    schema_version = schema.get("version", "unknown")
+                    # Schema version (CycloneDX uses specVersion at top level)
+                    schema_version = sbom_data.get("specVersion", "unknown")
                     ctx.log_display.write(
                         f"[{self.name}] SBOM Schema Version: {schema_version}"
                     )
+                    await asyncio.sleep(0)
                     
-                    # Descriptor info (Syft version, timestamp)
-                    descriptor = sbom_data.get("descriptor", {})
-                    if descriptor:
-                        syft_version = descriptor.get("version", "unknown")
-                        timestamp = descriptor.get("timestamp", "unknown")
-                        ctx.log_display.write(
-                            f"[{self.name}] Generated by Syft {syft_version} at {timestamp}"
-                        )
+                    # Tool info (Syft version, timestamp) - CycloneDX uses metadata.tools
+                    metadata = sbom_data.get("metadata", {})
+                    tools = metadata.get("tools", {}) if metadata else {}
+                    tool_components = tools.get("components", []) if isinstance(tools, dict) else []
+                    syft_version = "unknown"
+                    timestamp = metadata.get("timestamp", "unknown") if metadata else "unknown"
+                    if tool_components:
+                        # Find syft tool
+                        for tool in tool_components:
+                            if isinstance(tool, dict) and tool.get("name", "").lower() == "syft":
+                                syft_version = tool.get("version", "unknown")
+                                break
+                    ctx.log_display.write(
+                        f"[{self.name}] Generated by Syft {syft_version} at {timestamp}"
+                    )
+                    await asyncio.sleep(0)
                     
                     # SBOM size (approximate)
                     sbom_size = len(json.dumps(sbom_data))
@@ -263,6 +348,7 @@ class GenerateSbom:
                     ctx.log_display.write(
                         f"[{self.name}] SBOM Size: {size_kb:.2f} KB"
                     )
+                    await asyncio.sleep(0)
 
             ctx.findings.append(
                 Finding(
@@ -275,7 +361,8 @@ class GenerateSbom:
         except SyftNotFoundError as e:
             # Fatal error - Syft is required
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: {str(e)}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: {str(e)}")
+                await asyncio.sleep(0)
             ctx.findings.append(
                 Finding(
                     source=self.name,
@@ -290,7 +377,8 @@ class GenerateSbom:
         except SyftError as e:
             # Fatal error - SBOM generation failed
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: {str(e)}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: {str(e)}")
+                await asyncio.sleep(0)
             ctx.findings.append(
                 Finding(
                     source=self.name,

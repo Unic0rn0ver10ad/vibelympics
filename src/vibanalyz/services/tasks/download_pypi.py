@@ -1,5 +1,6 @@
 """Task to download a PyPI package artifact for SBOM generation."""
 
+import asyncio
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -27,7 +28,7 @@ class DownloadPyPi:
         """Generate status message for this task."""
         return "Download Package"
 
-    def run(self, ctx: Context) -> Context:
+    async def run(self, ctx: Context) -> Context:
         """Download the package file and update context."""
         # Status is updated by pipeline before task runs
         if not ctx.package:
@@ -48,13 +49,19 @@ class DownloadPyPi:
             ctx.log_display.write(
                 f"[{self.name}] Preparing to download {ctx.package.name}=={version}"
             )
+            await asyncio.sleep(0)
 
         try:
             # Get download information
             if ctx.log_display:
                 ctx.log_display.write(f"[{self.name}] Resolving download URL from PyPI...")
+                await asyncio.sleep(0)
             
-            download_info = get_download_info(ctx.package.name, version)
+            # Run blocking network call in executor
+            loop = asyncio.get_event_loop()
+            download_info = await loop.run_in_executor(
+                None, get_download_info, ctx.package.name, version
+            )
             ctx.download_info = download_info
 
             # Download file to temp directory
@@ -65,13 +72,19 @@ class DownloadPyPi:
                 ctx.log_display.write(
                     f"[{self.name}] Downloading to {target_path.as_posix()}"
                 )
+                await asyncio.sleep(0)
 
-            with requests.get(download_info.url, stream=True, timeout=30) as response:
-                response.raise_for_status()
-                with open(target_path, "wb") as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
+            # Run blocking download in executor
+            def _download_file():
+                with requests.get(download_info.url, stream=True, timeout=30) as response:
+                    response.raise_for_status()
+                    with open(target_path, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                return target_path
+
+            await loop.run_in_executor(None, _download_file)
 
             # Update context with local path
             ctx.download_info.local_path = str(target_path)
@@ -80,6 +93,7 @@ class DownloadPyPi:
                 ctx.log_display.write(
                     f"[{self.name}] Downloaded {download_info.filename} ({download_info.package_type})"
                 )
+                await asyncio.sleep(0)
 
             ctx.findings.append(
                 Finding(
@@ -91,7 +105,8 @@ class DownloadPyPi:
 
         except PackageNotFoundError as e:
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: {str(e)}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: {str(e)}")
+                await asyncio.sleep(0)
             ctx.findings.append(
                 Finding(
                     source=self.name,
@@ -102,7 +117,8 @@ class DownloadPyPi:
             raise PipelineFatalError(message=str(e), source=self.name)
         except NetworkError as e:
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: {str(e)}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: {str(e)}")
+                await asyncio.sleep(0)
             ctx.findings.append(
                 Finding(
                     source=self.name,
@@ -113,7 +129,8 @@ class DownloadPyPi:
             raise PipelineFatalError(message=str(e), source=self.name)
         except PyPIError as e:
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: PyPI error: {str(e)}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: PyPI error: {str(e)}")
+                await asyncio.sleep(0)
             ctx.findings.append(
                 Finding(
                     source=self.name,
@@ -125,7 +142,8 @@ class DownloadPyPi:
         except requests.exceptions.RequestException as e:
             msg = f"Failed to download package artifact: {e}"
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] ERROR: {msg}")
+                ctx.log_display.write_error(f"[{self.name}] ERROR: {msg}")
+                await asyncio.sleep(0)
             ctx.findings.append(
                 Finding(
                     source=self.name,

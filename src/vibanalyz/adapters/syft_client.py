@@ -21,7 +21,7 @@ class SyftNotFoundError(SyftError):
     pass
 
 
-def generate_sbom(file_path: str, output_format: str = "json") -> dict:
+def generate_sbom(file_path: str, output_format: str = "cyclonedx-json") -> dict:
     """
     Run Syft on a file or directory and return SBOM as dict.
     

@@ -1,6 +1,6 @@
 """Protocols (interfaces) for analyzers and tasks."""
 
-from typing import Iterable, Protocol
+from typing import Awaitable, Iterable, Protocol
 
 from vibanalyz.domain.models import Context, Finding
 
@@ -24,7 +24,7 @@ class Task(Protocol):
         """Generate status message for this task."""
         ...
 
-    def run(self, ctx: Context) -> Context:
-        """Run the task and return updated context."""
+    def run(self, ctx: Context) -> Awaitable[Context] | Context:
+        """Run the task and return updated context. Can be async or sync."""
         ...
 

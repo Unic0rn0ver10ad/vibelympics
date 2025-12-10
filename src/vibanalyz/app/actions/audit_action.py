@@ -98,22 +98,7 @@ class AuditAction:
 
     def _display_results(self, result: AuditResult, log_display, total_duration: float = None) -> None:
         """Display audit results."""
-        # Log results
-        log_display.write(f"\nAudit complete!")
-        log_display.write(f"Risk Score: {result.score}")
-        log_display.write(f"Findings: {len(result.ctx.findings)}")
-
-        if result.ctx.findings:
-            log_display.write("\nFindings:")
-            for finding in result.ctx.findings:
-                log_display.write(
-                    f"  [{finding.severity.upper()}] {finding.source}: {finding.message}"
-                )
-
-        if result.pdf_path:
-            log_display.write(f"\nPDF report saved to: {result.pdf_path}")
-        
-        # Display total audit time
+        # Display total audit time first
         if total_duration is not None:
             package_name = result.ctx.package_name
             package_version = None
@@ -125,6 +110,10 @@ class AuditAction:
             version_str = f"=={package_version}" if package_version else ""
             package_display = f"{package_name}{version_str}"
             log_display.write(f"\nVibanalyz completed audit for {package_display} in {total_duration:.1f} seconds.")
+        
+        # Display PDF report path
+        if result.pdf_path:
+            log_display.write(f"PDF report saved to: {result.pdf_path}")
 
         # Check for error findings and display them prominently
         error_findings = [

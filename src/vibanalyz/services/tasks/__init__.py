@@ -27,6 +27,7 @@ from vibanalyz.services.tasks import (  # noqa: E402, F401
     download_npm,
     download_pypi,
     download_rust,
+    extract_report_data,
     fetch_npm,
     fetch_pypi,
     fetch_rust,

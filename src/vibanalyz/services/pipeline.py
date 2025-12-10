@@ -18,6 +18,7 @@ CHAINS = {
         "generate_sbom",
         "scan_vulnerabilities",
         "run_analyses",
+        "extract_report_data",
         "generate_pdf_report",
     ],
     "npm": [
@@ -26,6 +27,7 @@ CHAINS = {
         "generate_sbom",
         "scan_vulnerabilities",
         "run_analyses",
+        "extract_report_data",
         "generate_pdf_report",
     ],
     "rust": [
@@ -34,6 +36,7 @@ CHAINS = {
         "generate_sbom",
         "scan_vulnerabilities",
         "run_analyses",
+        "extract_report_data",
         "generate_pdf_report",
     ],
 }

@@ -1,4 +1,4 @@
-"""Task to generate a PDF report from the TUI log."""
+"""Task to generate a PDF report from structured report data."""
 
 import asyncio
 
@@ -6,12 +6,12 @@ from vibanalyz.domain.exceptions import PipelineFatalError
 from vibanalyz.domain.models import Context, Finding
 from vibanalyz.domain.protocols import Task
 from vibanalyz.services.artifacts import get_artifacts_dir, get_host_hint
-from vibanalyz.services.pdf_report import write_pdf_from_text
+from vibanalyz.services.pdf_report import format_report_text, write_pdf_from_text
 from vibanalyz.services.tasks import register
 
 
 class GeneratePdfReport:
-    """Generate PDF report using the accumulated log text."""
+    """Generate PDF report using structured report data."""
 
     name = "generate_pdf_report"
 
@@ -19,31 +19,27 @@ class GeneratePdfReport:
         return "Generate PDF report"
 
     async def run(self, ctx: Context) -> Context:
-        if ctx.log_display is None:
+        if ctx.report_data is None:
             raise PipelineFatalError(
-                message="Cannot generate PDF: log display unavailable",
-                source=self.name,
-            )
-
-        log_text = ctx.log_display.get_text() or ""
-        if not log_text.strip():
-            raise PipelineFatalError(
-                message="Cannot generate PDF: no log content available",
+                message="Cannot generate PDF: report data not available. Ensure extract_report_data task ran successfully.",
                 source=self.name,
             )
 
         if ctx.log_display:
-            ctx.log_display.write(f"[{self.name}] Generating PDF from log output...")
+            ctx.log_display.write(f"[{self.name}] Generating PDF from report data...")
             await asyncio.sleep(0)
 
         artifacts_dir = get_artifacts_dir()
         filename = f"vibanalyz-{ctx.package_name}-report.pdf"
 
         try:
+            # Format report data into text
+            report_text = format_report_text(ctx.report_data)
+            
             # Run blocking PDF generation in executor
             loop = asyncio.get_event_loop()
             pdf_path = await loop.run_in_executor(
-                None, write_pdf_from_text, log_text, filename, artifacts_dir
+                None, write_pdf_from_text, report_text, filename, artifacts_dir
             )
             ctx.report_path = str(pdf_path)
         except Exception as e:
@@ -66,7 +62,7 @@ class GeneratePdfReport:
         ctx.findings.append(
             Finding(
                 source=self.name,
-                message="PDF report generated from log output",
+                message="PDF report generated from structured report data",
                 severity="info",
             )
         )

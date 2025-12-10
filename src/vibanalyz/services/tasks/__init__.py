@@ -33,5 +33,6 @@ from vibanalyz.services.tasks import (  # noqa: E402, F401
     generate_pdf_report,
     generate_sbom,
     run_analyses,
+    scan_vulnerabilities,
 )
 

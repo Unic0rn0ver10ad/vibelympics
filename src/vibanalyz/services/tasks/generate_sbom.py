@@ -281,9 +281,29 @@ class GenerateSbom:
                 if isinstance(sbom_data, dict):
                     analysis = _analyze_sbom_structure(sbom_data, ctx)
                     
+                    # Check for empty SBOM
+                    total_components = analysis['total_components']
+                    if total_components == 0:
+                        # Empty SBOM detected - this is a problem
+                        warning_msg = (
+                            f"WARNING: SBOM is empty (0 components found). "
+                            f"This may indicate an issue with SBOM generation. "
+                            f"Vulnerability scanning will have no components to analyze."
+                        )
+                        if ctx.log_display:
+                            ctx.log_display.write_error(f"[{self.name}] {warning_msg}")
+                            await asyncio.sleep(0)
+                        ctx.findings.append(
+                            Finding(
+                                source=self.name,
+                                message=warning_msg,
+                                severity="warning",
+                            )
+                        )
+                    
                     # Display summary metrics
                     ctx.log_display.write(
-                        f"[{self.name}] Total Components: {analysis['total_components']}"
+                        f"[{self.name}] Total Components: {total_components}"
                     )
                     await asyncio.sleep(0)
                     ctx.log_display.write(

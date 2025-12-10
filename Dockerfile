@@ -80,6 +80,17 @@ RUN echo "📋 Installing Syft CLI (SBOM generation tool)..." && \
     rm -f syft_${SYFT_VERSION}_linux_amd64.tar.gz && \
     syft version
 
+# Install Grype CLI
+# Use Python's tarfile module to extract since tar package may not be available
+RUN echo "🔍 Installing Grype CLI (vulnerability scanner)..." && \
+    GRYPE_VERSION=$(curl -s https://api.github.com/repos/anchore/grype/releases/latest | grep '"tag_name":' | sed -E 's/.*"v([^"]+)".*/\1/') && \
+    curl -LO https://github.com/anchore/grype/releases/download/v${GRYPE_VERSION}/grype_${GRYPE_VERSION}_linux_amd64.tar.gz && \
+    python3 -c "import tarfile; tarfile.open('grype_${GRYPE_VERSION}_linux_amd64.tar.gz').extractall()" && \
+    mv grype /usr/local/bin/grype && \
+    chmod +x /usr/local/bin/grype && \
+    rm -f grype_${GRYPE_VERSION}_linux_amd64.tar.gz && \
+    grype version
+
 # Copy installed packages from builder
 COPY --from=builder /app/packages /app/packages
 

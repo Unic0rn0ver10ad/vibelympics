@@ -278,8 +278,11 @@ class GenerateSbom:
                         )
                         await asyncio.sleep(0)
                 
-                # Add separator section
-                ctx.log_display.write_section("SBOM Information", [])
+                # Add separator section header (without extra separator)
+                ctx.log_display.write("")  # Blank line before
+                ctx.log_display._write_yellow("=" * 50)
+                ctx.log_display._write_yellow("SBOM Information")
+                ctx.log_display._write_yellow("=" * 50)
                 await asyncio.sleep(0)
                 
                 # Analyze and display SBOM summary

@@ -56,18 +56,26 @@ RUN echo "📚 Installing runtime libraries and build tools..." && \
 
 # Install Rust and Cargo using rustup (official Rust installer)
 # Chainguard/Wolfi doesn't have rust/cargo packages, so we use rustup
-# Copy binaries to /usr/local/bin so they're accessible to all users (including nonroot)
+# Install in shared location (/usr/local/rustup and /usr/local/cargo) so nonroot user can access it
 RUN echo "🦀 Installing Rust toolchain (this may take a minute)..." && \
+    # Set environment variables to install rustup in shared location
+    export RUSTUP_HOME=/usr/local/rustup && \
+    export CARGO_HOME=/usr/local/cargo && \
+    # Install rustup with stable toolchain
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal && \
-    /root/.cargo/bin/rustup --version && \
-    /root/.cargo/bin/cargo --version && \
+    # Verify installation
+    /usr/local/cargo/bin/rustup --version && \
+    /usr/local/cargo/bin/cargo --version && \
     # Copy cargo, rustc, and rustup binaries to /usr/local/bin (not symlinks)
     # This ensures they're accessible to nonroot user
-    cp /root/.cargo/bin/cargo /usr/local/bin/cargo && \
-    cp /root/.cargo/bin/rustc /usr/local/bin/rustc && \
-    cp /root/.cargo/bin/rustup /usr/local/bin/rustup && \
+    cp /usr/local/cargo/bin/cargo /usr/local/bin/cargo && \
+    cp /usr/local/cargo/bin/rustc /usr/local/bin/rustc && \
+    cp /usr/local/cargo/bin/rustup /usr/local/bin/rustup && \
     # Ensure binaries are executable by all users
-    chmod +x /usr/local/bin/cargo /usr/local/bin/rustc /usr/local/bin/rustup
+    chmod +x /usr/local/bin/cargo /usr/local/bin/rustc /usr/local/bin/rustup && \
+    # Make Rust toolchain directories accessible to all users (read/write/execute for group and others)
+    # This allows nonroot user to use and update the Rust toolchain
+    chmod -R a+rwX /usr/local/rustup /usr/local/cargo
 
 # Install Syft CLI
 # Use Python's tarfile module to extract since tar package may not be available
@@ -110,6 +118,14 @@ WORKDIR /app/output
 
 # Set PYTHONPATH to include both packages and source
 ENV PYTHONPATH=/app/packages:/app/src
+
+# Set Rust environment variables so rustup works for nonroot user
+# RUSTUP_HOME and CARGO_HOME point to shared installation location
+# RUSTUP_TOOLCHAIN tells rustup which toolchain to use
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_TOOLCHAIN=stable
+ENV PATH=/usr/local/cargo/bin:$PATH
 
 # Set entrypoint - use python -m
 ENTRYPOINT ["python", "-m", "vibanalyz.cli"]

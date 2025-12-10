@@ -110,7 +110,7 @@ class DownloadNpm:
             # Install NPM dependencies so Syft can detect them
             # Syft's Node.js cataloger requires node_modules to detect dependencies
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] Installing NPM dependencies...")
+                ctx.log_display.write_with_spinner(f"[{self.name}] Installing NPM dependencies...")
                 await asyncio.sleep(0)
 
             def _install_dependencies():
@@ -118,7 +118,7 @@ class DownloadNpm:
                 package_json = package_dir / "package.json"
                 if not package_json.exists():
                     # No package.json, skip installation
-                    return
+                    return False  # False means skipped
                 
                 # Run npm install (production dependencies only to speed up)
                 # Use --no-audit and --no-fund to skip unnecessary checks
@@ -135,12 +135,16 @@ class DownloadNpm:
                     raise subprocess.CalledProcessError(
                         result.returncode, "npm install", error_msg
                     )
-                return
+                return True  # True means success
 
             try:
-                await loop.run_in_executor(None, _install_dependencies)
+                install_result = await loop.run_in_executor(None, _install_dependencies)
                 if ctx.log_display:
-                    ctx.log_display.write(f"[{self.name}] Dependencies installed successfully")
+                    if install_result is False:
+                        # No package.json, skip installation
+                        ctx.log_display.write(f"[{self.name}] No package.json found, skipping dependency installation")
+                    elif install_result is True:
+                        ctx.log_display.write(f"[{self.name}] Dependencies installed successfully")
                     await asyncio.sleep(0)
             except subprocess.TimeoutExpired:
                 if ctx.log_display:

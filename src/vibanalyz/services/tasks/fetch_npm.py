@@ -11,6 +11,7 @@ from vibanalyz.adapters.npm_client import (
 from vibanalyz.domain.exceptions import PipelineFatalError
 from vibanalyz.domain.models import Context, Finding
 from vibanalyz.domain.protocols import Task
+from vibanalyz.services.formatting import format_package_info_lines
 from vibanalyz.services.tasks import register
 
 
@@ -54,6 +55,12 @@ class FetchNpm:
                 if ctx.package.summary:
                     ctx.log_display.write(f"[{self.name}] Summary: {ctx.package.summary}")
                     await asyncio.sleep(0)
+                
+                # Display Package Information section
+                ctx.log_display.set_mode("action")
+                lines = format_package_info_lines(ctx.package)
+                ctx.log_display.write_section("Package Information", lines)
+                await asyncio.sleep(0)
             
             version_info = f" version {ctx.package.version}" if ctx.package.version else ""
             ctx.findings.append(

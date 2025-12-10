@@ -1,10 +1,8 @@
 """Log display component wrapper."""
 
 import asyncio
-from typing import Literal, Optional
+from typing import Literal
 
-from rich.console import RenderableType
-from rich.spinner import Spinner
 from rich.text import Text
 from textual.widgets import RichLog
 
@@ -19,8 +17,6 @@ class LogDisplay:
         self._log_buffer: list[str] = []
         # Track current mode to control coloring (action, task, or error)
         self._mode: Literal["action", "task", "error"] = "action"
-        # Track active spinner message for updating
-        self._active_spinner: Optional[tuple[str, Spinner]] = None
 
     def set_mode(self, mode: Literal["action", "task", "error"]) -> None:
         """Set the current log mode to control coloring."""
@@ -97,21 +93,22 @@ class LogDisplay:
     
     def write_with_spinner(self, message: str, spinner_style: str = "dots") -> None:
         """
-        Write a message with an inline spinner.
+        Write a message with a static clock icon indicator.
         
-        The spinner will animate until the next message is written to the log.
+        The clock icon indicates a long-running operation is in progress.
         When the operation completes, write a completion message using write().
         
         Args:
             message: The message text to display
-            spinner_style: The spinner style (e.g., "dots", "line", "bouncingBar", "clock")
+            spinner_style: Unused (kept for API compatibility)
         """
-        # Create spinner with message
-        spinner = Spinner(spinner_style, text=message, style=self._style_for_mode())
-        self._active_spinner = (message, spinner)
+        # Use clock emoji as static indicator
+        clock_icon = "🕛"
+        spinner_message = f"{clock_icon} {message}"
         
-        # Write spinner to log (it will animate)
-        self.widget.write(spinner)
-        # Store plain text message in buffer (without spinner animation)
+        # Write message with clock icon
+        styled = Text(spinner_message, style=self._style_for_mode())
+        self.widget.write(styled)
+        # Store plain text message in buffer (without clock icon for cleaner text export)
         self._log_buffer.append(message)
 

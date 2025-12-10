@@ -153,7 +153,7 @@ class ScanVulnerabilities:
         try:
             # Run Grype on SBOM file
             if ctx.log_display:
-                ctx.log_display.write_with_spinner(f"[{self.name}] Running Grype...", spinner_style="dots")
+                ctx.log_display.write_with_spinner(f"[{self.name}] Running Grype... (please be patient, this can take several minutes)", spinner_style="dots")
                 await asyncio.sleep(0)
             
             # Run blocking subprocess call in executor
@@ -253,9 +253,6 @@ class ScanVulnerabilities:
 
             # Display vulnerability summary
             if ctx.log_display:
-                ctx.log_display.write_section("Vulnerability Summary", [])
-                await asyncio.sleep(0)
-                
                 if unique_vulns > 0:
                     ctx.log_display.write(
                         f"[{self.name}] Total Unique Vulnerabilities: {unique_vulns}"
@@ -284,10 +281,8 @@ class ScanVulnerabilities:
                     )
                     await asyncio.sleep(0)
 
-            # Display detailed vulnerability list
+            # Display detailed vulnerability list (only if vulnerabilities found)
             if unique_vulns > 0 and ctx.log_display:
-                ctx.log_display.write_section("Vulnerability Details", [])
-                await asyncio.sleep(0)
                 
                 # Group by severity for display
                 vulns_by_severity: dict[str, list[tuple[tuple, dict]]] = defaultdict(list)

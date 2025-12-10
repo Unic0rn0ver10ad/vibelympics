@@ -60,12 +60,8 @@ class AuditAction:
             audit_end_time = time.perf_counter()
             total_duration = audit_end_time - audit_start_time
 
-            # Display PyPI metadata if available
-            if log and result.ctx.package:
-                log.set_mode("action")
-                self._display_package_info(result.ctx.package, log)
-
             # Display results
+            # Note: Package Information is now displayed in the fetch task, not here
             if log:
                 log.set_mode("action")
             self._display_results(result, log, total_duration)
@@ -99,48 +95,6 @@ class AuditAction:
                 version_str = f"=={version}" if version else ""
                 log.write_error(f"\nVibanalyz audit failed for {package_name}{version_str} after {total_duration:.1f} seconds.")
             raise
-
-    def _display_package_info(self, package, log_display) -> None:
-        """Display package metadata information."""
-        lines = []
-        lines.append(f"Package: {package.name}")
-
-        if package.version:
-            lines.append(f"Version: {package.version}")
-
-        if package.summary:
-            lines.append(f"Summary: {package.summary}")
-
-        if package.requires_dist:
-            dep_count = len(package.requires_dist)
-            lines.append(f"Dependencies: {dep_count} direct dependencies")
-
-        if package.project_urls:
-            # Look for repository URL
-            repo_url = None
-            for key, url in package.project_urls.items():
-                if key.lower() in ["repository", "source", "code"]:
-                    repo_url = url
-                    break
-
-            if repo_url:
-                lines.append(f"Repository: {repo_url}")
-            elif package.home_page:
-                lines.append(f"Homepage: {package.home_page}")
-
-        if package.author:
-            author_info = package.author
-            if package.author_email:
-                author_info += f" ({package.author_email})"
-            lines.append(f"Author: {author_info}")
-
-        if package.license:
-            lines.append(f"License: {package.license}")
-
-        if package.release_count is not None:
-            lines.append(f"Total Releases: {package.release_count}")
-
-        log_display.write_section("Package Information", lines)
 
     def _display_results(self, result: AuditResult, log_display, total_duration: float = None) -> None:
         """Display audit results."""

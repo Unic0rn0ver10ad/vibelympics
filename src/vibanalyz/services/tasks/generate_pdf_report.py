@@ -34,7 +34,11 @@ class GeneratePdfReport:
 
         try:
             # Format report data into text
-            report_text = format_report_text(ctx.report_data)
+            report_text = format_report_text(
+                ctx.report_data,
+                package_name=ctx.package_name,
+                output_dir=artifacts_dir,
+            )
             
             # Run blocking PDF generation in executor
             loop = asyncio.get_event_loop()

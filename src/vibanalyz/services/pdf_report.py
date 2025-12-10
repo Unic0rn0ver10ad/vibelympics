@@ -1,5 +1,6 @@
 """Generate PDF reports from plain text."""
 
+import pprint
 from pathlib import Path
 from typing import Iterable
 
@@ -9,16 +10,44 @@ from reportlab.pdfgen import canvas
 from vibanalyz.services.artifacts import get_artifacts_dir
 
 
-def format_report_text(report_data: dict) -> str:
+def format_report_text(
+    report_data: dict,
+    package_name: str | None = None,
+    output_dir: Path | str | None = None,
+) -> str:
     """
     Format report data dictionary into formatted text for PDF.
     
     Args:
         report_data: Dictionary with repository_health, components, and vulnerabilities keys
+        package_name: Optional package name for saving dict file
+        output_dir: Optional output directory for saving dict file; defaults to artifacts dir
     
     Returns:
         Formatted text string
     """
+    # Save structured dict to text file if package_name is provided
+    if package_name:
+        try:
+            if output_dir is None:
+                output_dir = get_artifacts_dir()
+            elif isinstance(output_dir, str):
+                output_dir = Path(output_dir)
+            
+            output_dir.mkdir(parents=True, exist_ok=True)
+            filename = f"vibanalyz-{package_name}-report-data.txt"
+            dict_file_path = output_dir / filename
+            
+            # Format dict as Python literal using pprint
+            dict_text = pprint.pformat(report_data, width=120, indent=2)
+            
+            # Write to file
+            with open(dict_file_path, "w", encoding="utf-8") as f:
+                f.write(dict_text)
+        except Exception:
+            # Silently fail - don't break PDF generation if dict saving fails
+            pass
+    
     lines = []
     
     # Repository Health section

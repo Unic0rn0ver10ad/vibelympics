@@ -125,7 +125,7 @@ class DownloadRust:
             # Try to generate Cargo.lock for Syft (optional)
             # Syft's Rust cataloger works better with Cargo.lock, but can work with just Cargo.toml
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] Generating Cargo.lock (optional)...")
+                ctx.log_display.write_with_spinner(f"[{self.name}] Generating Cargo.lock (optional)...", spinner_style="dots")
                 await asyncio.sleep(0)
                 if has_dependencies:
                     ctx.log_display.write(
@@ -189,6 +189,10 @@ class DownloadRust:
                 cargo_lock_path = await loop.run_in_executor(None, _generate_lockfile)
                 if cargo_lock_path and ctx.log_display:
                     ctx.log_display.write(f"[{self.name}] Cargo.lock generated successfully")
+                    await asyncio.sleep(0)
+                elif ctx.log_display:
+                    # No lockfile generated, but no error either (might not have Cargo.toml)
+                    ctx.log_display.write(f"[{self.name}] Cargo.lock generation skipped (no Cargo.toml)")
                     await asyncio.sleep(0)
             except subprocess.TimeoutExpired:
                 lockfile_error = "cargo generate-lockfile timed out after 5 minutes"

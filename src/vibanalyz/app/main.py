@@ -71,7 +71,7 @@ class AuditApp(App):
     }
     """
 
-    TITLE = "vibanalyz – MVP stub"
+    TITLE = "Vibanalyz MVP 1.0"
 
     def __init__(self, package_name: str | None = None):
         """Initialize the app with optional package name."""
@@ -119,6 +119,9 @@ class AuditApp(App):
 
     def on_mount(self) -> None:
         """Called when app is mounted."""
+        # Set theme to tokyo-night
+        self.theme = "tokyo-night"
+        
         # Initialize components
         self.components["log"] = LogDisplay(self.query_one("#results-log", RichLog))
         self.components["input"] = InputSection(

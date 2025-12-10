@@ -153,7 +153,7 @@ class ScanVulnerabilities:
         try:
             # Run Grype on SBOM file
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] Running Grype...")
+                ctx.log_display.write_with_spinner(f"[{self.name}] Running Grype...", spinner_style="dots")
                 await asyncio.sleep(0)
             
             # Run blocking subprocess call in executor
@@ -161,6 +161,11 @@ class ScanVulnerabilities:
             vuln_data = await loop.run_in_executor(
                 None, scan_sbom, ctx.sbom.file_path
             )
+            
+            # Write completion message (replaces spinner)
+            if ctx.log_display:
+                ctx.log_display.write(f"[{self.name}] Grype scan completed")
+                await asyncio.sleep(0)
             
             # Store raw JSON in context
             ctx.vulns = VulnReport(raw=vuln_data)
@@ -376,6 +381,7 @@ class ScanVulnerabilities:
         except GrypeError as e:
             # Grype scan failed - log warning and continue
             if ctx.log_display:
+                # Clear spinner and show error
                 ctx.log_display.write_error(
                     f"[{self.name}] WARNING: Vulnerability scan failed: {str(e)}"
                 )

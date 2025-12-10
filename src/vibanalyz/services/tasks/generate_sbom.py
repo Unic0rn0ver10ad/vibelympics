@@ -212,7 +212,7 @@ class GenerateSbom:
         try:
             # Run Syft to generate SBOM
             if ctx.log_display:
-                ctx.log_display.write(f"[{self.name}] Running Syft...")
+                ctx.log_display.write_with_spinner(f"[{self.name}] Running Syft...", spinner_style="dots")
                 await asyncio.sleep(0)
             
             # Run blocking subprocess call in executor
@@ -220,6 +220,11 @@ class GenerateSbom:
             sbom_data = await loop.run_in_executor(
                 None, generate_sbom, ctx.download_info.local_path
             )
+            
+            # Write completion message (replaces spinner)
+            if ctx.log_display:
+                ctx.log_display.write(f"[{self.name}] Syft completed")
+                await asyncio.sleep(0)
             
             # Save SBOM to JSON file (shared artifacts directory)
             output_dir = get_artifacts_dir()
@@ -399,6 +404,7 @@ class GenerateSbom:
         except SyftError as e:
             # Fatal error - SBOM generation failed
             if ctx.log_display:
+                # Clear spinner and show error
                 ctx.log_display.write_error(f"[{self.name}] ERROR: {str(e)}")
                 await asyncio.sleep(0)
             ctx.findings.append(

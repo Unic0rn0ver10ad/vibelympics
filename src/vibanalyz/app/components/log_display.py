@@ -1,8 +1,10 @@
 """Log display component wrapper."""
 
 import asyncio
-from typing import Literal
+from typing import Literal, Optional
 
+from rich.console import RenderableType
+from rich.spinner import Spinner
 from rich.text import Text
 from textual.widgets import RichLog
 
@@ -17,6 +19,8 @@ class LogDisplay:
         self._log_buffer: list[str] = []
         # Track current mode to control coloring (action, task, or error)
         self._mode: Literal["action", "task", "error"] = "action"
+        # Track active spinner message for updating
+        self._active_spinner: Optional[tuple[str, Spinner]] = None
 
     def set_mode(self, mode: Literal["action", "task", "error"]) -> None:
         """Set the current log mode to control coloring."""
@@ -90,4 +94,24 @@ class LogDisplay:
         for line in lines:
             self.write(line)
         self._write_yellow("=" * 50)
+    
+    def write_with_spinner(self, message: str, spinner_style: str = "dots") -> None:
+        """
+        Write a message with an inline spinner.
+        
+        The spinner will animate until the next message is written to the log.
+        When the operation completes, write a completion message using write().
+        
+        Args:
+            message: The message text to display
+            spinner_style: The spinner style (e.g., "dots", "line", "bouncingBar", "clock")
+        """
+        # Create spinner with message
+        spinner = Spinner(spinner_style, text=message, style=self._style_for_mode())
+        self._active_spinner = (message, spinner)
+        
+        # Write spinner to log (it will animate)
+        self.widget.write(spinner)
+        # Store plain text message in buffer (without spinner animation)
+        self._log_buffer.append(message)
 

@@ -1,194 +1,117 @@
-"""Generate PDF reports from plain text."""
+"""HTML-based PDF report generation using WeasyPrint and Jinja2."""
 
-import pprint
+from __future__ import annotations
+
+import logging
+import os
 from pathlib import Path
-from typing import Iterable
 
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
+from jinja2 import Environment, FileSystemLoader, TemplateError
+from weasyprint import HTML
 
-from vibanalyz.services.artifacts import get_artifacts_dir
+from vibanalyz.domain.exceptions import PipelineFatalError
 
-
-def format_report_text(
-    report_data: dict,
-    package_name: str | None = None,
-    output_dir: Path | str | None = None,
-) -> str:
-    """
-    Format report data dictionary into formatted text for PDF.
-    
-    Args:
-        report_data: Dictionary with repository_health, components, and vulnerabilities keys
-        package_name: Optional package name for saving dict file
-        output_dir: Optional output directory for saving dict file; defaults to artifacts dir
-    
-    Returns:
-        Formatted text string
-    """
-    # Save structured dict to text file if package_name is provided
-    if package_name:
-        try:
-            if output_dir is None:
-                output_dir = get_artifacts_dir()
-            elif isinstance(output_dir, str):
-                output_dir = Path(output_dir)
-            
-            output_dir.mkdir(parents=True, exist_ok=True)
-            filename = f"vibanalyz-{package_name}-report-data.txt"
-            dict_file_path = output_dir / filename
-            
-            # Format dict as Python literal using pprint
-            dict_text = pprint.pformat(report_data, width=120, indent=2)
-            
-            # Write to file
-            with open(dict_file_path, "w", encoding="utf-8") as f:
-                f.write(dict_text)
-        except Exception:
-            # Silently fail - don't break PDF generation if dict saving fails
-            pass
-    
-    lines = []
-    
-    # Repository Health section
-    lines.append("=" * 50)
-    lines.append("Repository Health")
-    lines.append("=" * 50)
-    
-    repo_health = report_data.get("repository_health", {})
-    lines.append(f"Repository: {repo_health.get('repository', 'None found')}")
-    lines.append(f"License: {repo_health.get('license', 'No license found')}")
-    total_releases = repo_health.get("total_releases")
-    if total_releases is not None:
-        lines.append(f"Total Releases: {total_releases}")
-    else:
-        lines.append("Total Releases: None")
-    
-    # Components & Dependencies section
-    lines.append("")
-    lines.append("=" * 50)
-    lines.append("Components & Dependencies")
-    lines.append("=" * 50)
-    
-    components = report_data.get("components", {})
-    total_components = components.get("total_components")
-    if total_components is not None:
-        lines.append(f"Total Components: {total_components}")
-    else:
-        lines.append("Total Components: None")
-    
-    dependency_depth = components.get("dependency_depth")
-    if dependency_depth is not None:
-        lines.append(f"Dependency Depth: {dependency_depth} level(s)")
-    else:
-        lines.append("Dependency Depth: None")
-    
-    direct_deps = components.get("direct_dependencies")
-    if direct_deps is not None:
-        lines.append(f"Direct Dependencies: {direct_deps}")
-    else:
-        lines.append("Direct Dependencies: None")
-    
-    transitive_deps = components.get("transitive_dependencies")
-    if transitive_deps is not None:
-        lines.append(f"Transitive Dependencies: {transitive_deps}")
-    else:
-        lines.append("Transitive Dependencies: None")
-    
-    # Known Vulnerabilities section
-    lines.append("")
-    lines.append("=" * 50)
-    lines.append("Known Vulnerabilities")
-    lines.append("=" * 50)
-    
-    vulns = report_data.get("vulnerabilities", {})
-    total_matches = vulns.get("total_matches", "Unknown")
-    unique_vulns = vulns.get("unique_vulnerabilities", "Unknown")
-    
-    lines.append(f"Found {total_matches} vulnerability match(es), {unique_vulns} unique vulnerability(ies)")
-    
-    vulnerabilities_found = vulns.get("vulnerabilities_found")
-    if vulnerabilities_found:
-        vuln_list = [f"{v.get('cve_id', 'UNKNOWN')}: {v.get('package_name', 'unknown')}@{v.get('package_version', 'unknown')}" for v in vulnerabilities_found]
-        lines.append(f"Vulnerabilities found: {', '.join(vuln_list)}")
-    else:
-        lines.append("Vulnerabilities found: None")
-    
-    high_sev = vulns.get("high_severity", "Unknown")
-    moderate_sev = vulns.get("moderate_severity", "Unknown")
-    low_sev = vulns.get("low_severity", "Unknown")
-    
-    lines.append(f"High Severity Vulnerabilities: {high_sev}")
-    lines.append(f"Moderate Severity Vulnerabilities: {moderate_sev}")
-    lines.append(f"Low Severity Vulnerabilities: {low_sev}")
-    
-    return "\n".join(lines)
+logger = logging.getLogger(__name__)
 
 
-def _wrap_lines(text: str, max_chars: int = 100) -> list[str]:
-    """Wrap lines to a maximum character width."""
-    wrapped: list[str] = []
-    for line in text.splitlines():
-        if len(line) <= max_chars:
-            wrapped.append(line)
-            continue
-        # simple hard wrap without hyphenation
-        start = 0
-        while start < len(line):
-            wrapped.append(line[start : start + max_chars])
-            start += max_chars
-    return wrapped
+def extract_template_variables(data: dict) -> dict:
+    """Map structured report data to template variables."""
+    variables: dict[str, str | int | None] = {}
+
+    # Extract package information
+    variables["package_name"] = data.get("package_name", "N/A")
+    variables["package_version"] = data.get("package_version", "N/A")
+    variables["repo_name"] = data.get("repo_name", "N/A")
+    variables["package_url"] = data.get("package_url", "N/A")
+
+    components = data.get("components") or {}
+    variables["total_components"] = components.get("total_components", "N/A")
+    variables["direct_dependencies"] = components.get("direct_dependencies", "N/A")
+    variables["transitive_dependencies"] = components.get("transitive_dependencies", "N/A")
+    variables["dependency_depth"] = components.get("dependency_depth", "N/A")
+
+    repo_health = data.get("repository_health") or {}
+    variables["license"] = repo_health.get("license", "N/A")
+    variables["repository_url"] = repo_health.get("repository", "N/A")
+    variables["total_releases"] = repo_health.get("total_releases", "N/A")
+
+    vulns = data.get("vulnerabilities") or {}
+    variables["total_matches"] = vulns.get("total_matches", "N/A")
+    variables["unique_vulnerabilities"] = vulns.get("unique_vulnerabilities", "N/A")
+    variables["high_severity"] = vulns.get("high_severity", "N/A")
+    variables["moderate_severity"] = vulns.get("moderate_severity", "N/A")
+    variables["low_severity"] = vulns.get("low_severity", "N/A")
+
+    return variables
 
 
-def write_pdf_from_text(
-    text: str,
-    filename: str,
-    output_dir: Path | str | None = None,
-    *,
-    max_chars_per_line: int = 100,
-) -> Path:
-    """
-    Render the provided text into a PDF file.
+def get_template_path() -> Path:
+    """Resolve the bundled XHTML template path, with optional override."""
+    env_value = os.environ.get("VIBANALYZ_TEMPLATE_PATH")
+    if env_value:
+        candidate = Path(env_value)
+        if candidate.exists():
+            return candidate
+        raise FileNotFoundError(f"Template file not found at VIBANALYZ_TEMPLATE_PATH: {candidate}")
 
-    Args:
-        text: Plain text content to render.
-        filename: Target filename (e.g., 'vibanalyz-<pkg>-report.pdf').
-        output_dir: Directory to write the PDF to; defaults to artifacts dir.
-        max_chars_per_line: Soft wrap width to keep content readable.
+    try:
+        from importlib import resources
 
-    Returns:
-        Absolute Path to the generated PDF.
-    """
-    if output_dir is None:
-        output_dir = get_artifacts_dir()
-    elif isinstance(output_dir, str):
-        output_dir = Path(output_dir)
+        template = resources.files("vibanalyz.data") / "vibanalyz_audit_template.xhtml"  # type: ignore[attr-defined]
+        if template.exists():
+            return Path(template)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise PipelineFatalError(
+            message=f"Failed to resolve template path: {exc}",
+            source="get_template_path",
+        ) from exc
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = output_dir / filename
+    raise FileNotFoundError("Bundled template vibanalyz_audit_template.xhtml not found.")
 
-    c = canvas.Canvas(str(pdf_path), pagesize=letter)
-    width, height = letter
 
-    # basic margins
-    x_margin = 50
-    y_margin = 50
-    y = height - y_margin
+def render_html_template(template_path: str | Path, variables: dict) -> str:
+    """Render the XHTML template with the provided variables using Jinja2."""
+    template_path = Path(template_path)
+    if not template_path.exists():
+        raise FileNotFoundError(f"Template file not found: {template_path}")
 
-    c.setFont("Helvetica", 10)
+    try:
+        env = Environment(
+            loader=FileSystemLoader(template_path.parent),
+            autoescape=True,
+        )
+        template = env.get_template(template_path.name)
+        return template.render(**variables)
+    except TemplateError as exc:
+        raise PipelineFatalError(
+            message=f"Failed to render template: {exc}",
+            source="render_html_template",
+        ) from exc
+    except Exception as exc:  # pragma: no cover - defensive
+        raise PipelineFatalError(
+            message=f"Unexpected error rendering template: {exc}",
+            source="render_html_template",
+        ) from exc
 
-    # wrap lines
-    lines: Iterable[str] = _wrap_lines(text, max_chars=max_chars_per_line)
-    line_height = 12
 
-    for line in lines:
-        if y < y_margin:
-            c.showPage()
-            c.setFont("Helvetica", 10)
-            y = height - y_margin
-        c.drawString(x_margin, y, line)
-        y -= line_height
+def convert_html_to_pdf(html_content: str, pdf_path: str | Path) -> Path:
+    """Render HTML content to a PDF file using WeasyPrint."""
+    pdf_path = Path(pdf_path)
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
 
-    c.save()
-    return pdf_path.resolve()
+    try:
+        HTML(string=html_content, base_url=str(pdf_path.parent)).write_pdf(str(pdf_path))
+    except Exception as exc:
+        raise PipelineFatalError(
+            message=f"WeasyPrint failed to generate PDF: {exc}",
+            source="convert_html_to_pdf",
+        ) from exc
+
+    if not pdf_path.exists():
+        raise PipelineFatalError(
+            message=f"PDF not created at expected location: {pdf_path}",
+            source="convert_html_to_pdf",
+        )
+
+    return pdf_path
 

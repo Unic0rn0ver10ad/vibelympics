@@ -119,8 +119,8 @@ class AuditApp(App):
 
     def on_mount(self) -> None:
         """Called when app is mounted."""
-        # Set theme to tokyo-night
-        self.theme = "tokyo-night"
+        # Set theme to flexoki
+        self.theme = "flexoki"
         
         # Initialize components
         self.components["log"] = LogDisplay(self.query_one("#results-log", RichLog))

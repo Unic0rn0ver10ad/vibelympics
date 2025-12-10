@@ -8,18 +8,6 @@ RUN echo "🔨 Starting build stage..."
 
 WORKDIR /build
 
-# Install system dependencies needed for Pillow (used by reportlab)
-# Chainguard images use apk (Wolfi/Alpine package manager)
-RUN echo "📦 Installing build dependencies (Pillow/image libraries)..." && \
-    apk add --no-cache \
-    libjpeg-turbo-dev \
-    zlib-dev \
-    freetype-dev \
-    lcms2-dev \
-    openjpeg-dev \
-    tiff-dev \
-    libwebp-dev
-
 # Copy project files
 COPY pyproject.toml ./
 COPY src/ ./src/
@@ -37,22 +25,24 @@ USER root
 
 RUN echo "🚀 Starting runtime stage..."
 
-# Install runtime libraries needed for Pillow and tools for Syft
+# Install runtime libraries and tools
 # Using latest-dev variant to have apk available for installing runtime dependencies
-RUN echo "📚 Installing runtime libraries and build tools..." && \
+RUN echo "📚 Installing runtime libraries and tools..." && \
     apk add --no-cache \
-    libjpeg-turbo \
-    zlib \
-    freetype \
-    lcms2 \
-    openjpeg \
-    tiff \
-    libwebp \
     curl \
     nodejs \
     npm \
-    gcc \
-    openssl-dev
+    libstdc++ \
+    cairo \
+    pango \
+    gdk-pixbuf \
+    libffi \
+    libjpeg-turbo \
+    libpng \
+    freetype \
+    harfbuzz \
+    fontconfig \
+    ttf-dejavu
 
 # Install Rust and Cargo using rustup (official Rust installer)
 # Chainguard/Wolfi doesn't have rust/cargo packages, so we use rustup

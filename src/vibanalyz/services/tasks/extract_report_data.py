@@ -206,6 +206,34 @@ class ExtractReportData:
 
         report_data = {}
 
+        # Extract Package Information
+        report_data["package_name"] = ctx.package_name
+        report_data["package_version"] = ctx.package.version if ctx.package and ctx.package.version else ctx.requested_version or "N/A"
+        report_data["repo_name"] = ctx.repo_source if ctx.repo_source else "Unknown"
+        
+        # Get package URL (homepage or project URL)
+        package_url = None
+        if ctx.package and ctx.package.home_page:
+            package_url = ctx.package.home_page
+        elif ctx.package and ctx.package.project_urls:
+            # Look for homepage or project URL in project_urls (case-insensitive)
+            for key, url in ctx.package.project_urls.items():
+                if key.lower() in ["homepage", "home", "project-url", "project", "documentation", "docs"]:
+                    package_url = url
+                    break
+            # If still no URL found, use first available URL from project_urls
+            if not package_url and ctx.package.project_urls:
+                package_url = next(iter(ctx.package.project_urls.values()))
+        elif ctx.download_info and ctx.download_info.url:
+            # Fallback to download URL if no homepage available
+            package_url = ctx.download_info.url
+        
+        # If still no URL, try to construct PyPI URL
+        if not package_url and ctx.repo_source == "pypi":
+            package_url = f"https://pypi.org/project/{ctx.package_name}/"
+        
+        report_data["package_url"] = package_url if package_url else "N/A"
+
         # Extract Repository Health
         repository_health = {}
         

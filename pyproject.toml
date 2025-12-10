@@ -9,8 +9,9 @@ description = "Package security auditing tool - MVP stub"
 requires-python = ">=3.11"
 dependencies = [
     "textual>=0.40.0",
-    "reportlab>=4.0.0",
     "requests>=2.31.0",
+    "weasyprint>=60.0",
+    "jinja2>=3.1.0",
 ]
 
 [project.scripts]
@@ -18,4 +19,7 @@ vibanalyz = "vibanalyz.cli:main"
 
 [tool.hatchling.build]
 source-dir = "src"
+
+[tool.hatch.build]
+include = ["src/vibanalyz/data/*.xhtml"]
 

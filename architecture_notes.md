@@ -129,8 +129,7 @@ The vibanalyz TUI uses a modular architecture that separates concerns into disti
 ### 8. Reporting System
 
 **PDF Generation** (`services/pdf_report.py`):
-- `write_pdf_from_text()`: Generates PDF from plain text log content
-- Uses ReportLab for PDF creation
+- Renders HTML via Jinja2 and converts to PDF with WeasyPrint
 - Writes to artifacts directory
 
 **SBOM Generation** (`services/tasks/generate_sbom.py`):

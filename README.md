@@ -18,7 +18,7 @@ vibanalyz is a Python CLI/TUI application for auditing software packages from mu
 - **Modular Pipeline**: Chain-based task execution system
 - **Analyzer Plugin System**: Extensible security analysis framework
 - **SBOM Generation**: CycloneDX JSON format SBOMs using Syft (requires Syft >=1.38.x)
-- **PDF Report Generation**: Automated audit reports using ReportLab
+- **PDF Report Generation**: Automated audit reports using WeasyPrint (HTML + Jinja2 template)
 - **Docker Support**: Containerized deployment with Chainguard Python base image
 
 ## Installation

@@ -27,7 +27,7 @@ The application:
 2. **Dependencies**
    - Python version: `>=3.11`
    - `textual` – TUI framework
-   - `reportlab` – PDF generation
+   - `weasyprint`, `jinja2` – PDF generation (HTML template rendering)
    - `requests` – HTTP client for registry APIs
 
 ---
@@ -334,12 +334,13 @@ Thin orchestrator:
 
 ## PDF Report Generation
 
-### `services/reporting.py`
+### `services/pdf_report.py`
 
-Uses **ReportLab** for PDF generation:
+Uses **Jinja2 + WeasyPrint** for PDF generation:
 
-- `render_text_report(result: AuditResult) -> str` – Text representation of audit result
-- `write_pdf_report(result: AuditResult, output_dir: Path | str | None = None) -> Path` – Creates PDF report
+- `render_html_template(template_path, variables)` – fills XHTML template
+- `convert_html_to_pdf(html_content, pdf_path)` – renders PDF with WeasyPrint
+- Driven by task `services/tasks/generate_pdf_report.py`
 
 ---
 

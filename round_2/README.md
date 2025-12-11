@@ -36,6 +36,11 @@ vibanalyz is a Python CLI/TUI application for auditing software packages from mu
 pip install -e .
 ```
 
+**Note for Windows users**: If `pip` is not recognized, try one of these alternatives:
+- `python -m pip install -e .`
+- `py -m pip install -e .` (using Python launcher)
+- `pip3 install -e .` (if Python 3 is installed separately)
+
 ### Docker
 
 **Important**: The Dockerfile uses **Chainguard Python images** (`cgr.dev/chainguard/python:latest-dev`) for enhanced security. Do not change this to standard Python images.

@@ -4,7 +4,10 @@ A package security auditing tool for PyPI, NPM, and Rust/Crates.io packages.
 
 ![Vibanalyz TUI](vibanalyz_tui.png)
 
-Use it to generate Package Facts PDFs for your favorite packages!
+Vibanalyz gives you:
+- Package SBOM 💣
+- Vulnerability Scan
+- Customized "Package Facts" PDF
 
 ![Package Facts Report Example](packagefacts.png)
 
@@ -170,6 +173,8 @@ vibanalyz/
 
 ## Architecture
 
+Vibanalyz was created as a [modular monolith](https://en.wikipedia.org/wiki/Monolithic_application). On purpose, even!
+
 ### Pipeline System
 
 The audit pipeline uses a chain-based architecture where each repository source has its own task chain:
@@ -250,4 +255,5 @@ See `vibanalyz_mvp_prompt.md` for detailed instructions.
 ## License
 
 See [LICENSE](LICENSE) for details.
+
 

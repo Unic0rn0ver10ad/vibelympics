@@ -46,14 +46,6 @@ A wrapper around a Textual `RichLog` widget that displays detailed log messages.
 - Supports section formatting with separators
 - Scrollable display
 
-#### 3. ProgressTracker (`src/vibanalyz/app/components/progress_tracker.py`)
-
-A custom Textual widget showing animated pipeline progress with task names and completion states.
-
-**Key Methods:**
-- `start_task(index: int, status_msg: str)`: Marks a task as starting
-- `reset()`: Resets the tracker for a new audit
-
 ## Message Flow
 
 ### Status Messages
@@ -108,7 +100,6 @@ class Context:
     # ... other fields ...
     log_display: Optional["LogDisplay"] = None
     status_bar: Optional["StatusBar"] = None
-    progress_tracker: Optional["ProgressTracker"] = None
 ```
 
 ### 2. Pipeline Orchestrator (`src/vibanalyz/services/pipeline.py`)
@@ -160,7 +151,7 @@ class FetchPyPi:
 ### 4. Main Application (`src/vibanalyz/app/main.py`)
 
 **Initialization:**
-- Creates StatusBar, LogDisplay, ProgressTracker components
+- Creates StatusBar and LogDisplay components
 - Wraps Textual widgets with component classes
 - Passes components to AuditAction
 
@@ -341,7 +332,6 @@ def run(self, ctx: Context) -> Context:
 
 - **StatusBar Component**: `src/vibanalyz/app/components/status_bar.py`
 - **LogDisplay Component**: `src/vibanalyz/app/components/log_display.py`
-- **ProgressTracker Component**: `src/vibanalyz/app/components/progress_tracker.py`
 - **Pipeline Orchestrator**: `src/vibanalyz/services/pipeline.py`
 - **Task Interface**: `src/vibanalyz/domain/protocols.py`
 - **Context Model**: `src/vibanalyz/domain/models.py`

@@ -22,7 +22,6 @@ The vibanalyz TUI uses a modular architecture that separates concerns into disti
 - `LogDisplay` - Wraps RichLog, provides `write()`, `clear()`, `write_section()`, `get_text()`, `write_task_section()`
 - `StatusBar` - Wraps Static, provides `update()`, `update_status()`
 - `InputSection` - Wraps Input, provides `get_value()`, `set_value()`, `get_package_info()`
-- `ProgressTracker` - Custom widget showing pipeline progress with task names
 
 ### 2. Actions Layer (`app/actions/`)
 
@@ -541,4 +540,3 @@ The key to maintaining isolation is:
 - Write to artifacts directory (default `/artifacts`, configurable via `ARTIFACTS_DIR`)
 
 This architecture ensures that features can be added, modified, or removed without affecting other features.
-

@@ -1,4 +1,4 @@
-# vibanalyz 🦑
+# Vibanalyz 🦑
 
 A package security auditing tool for PyPI, NPM, and Rust/Crates.io packages.
 
@@ -256,6 +256,7 @@ See `vibanalyz_mvp_prompt.md` for detailed instructions.
 ## License
 
 See [LICENSE](LICENSE) for details.
+
 
 
 

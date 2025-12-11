@@ -1,7 +1,9 @@
 # vibanalyz 🦑
 
-A package security auditing tool for PyPI, NPM, and Rust/Crates.io packages. Use it to generate Package Facts PDFs for your favorite packages!
+A package security auditing tool for PyPI, NPM, and Rust/Crates.io packages.
+![Vibanalyz TUI](vibanalyz_tui.png)
 
+Use it to generate Package Facts PDFs for your favorite packages!
 ![Package Facts Report Example](packagefacts.png)
 
 ## Overview

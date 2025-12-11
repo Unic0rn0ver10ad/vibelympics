@@ -255,7 +255,8 @@ See `vibanalyz_mvp_prompt.md` for detailed instructions.
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+See [LICENSE](LICENSE) for details 🤔.
+
 
 
 

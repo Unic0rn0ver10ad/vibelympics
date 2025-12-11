@@ -8,6 +8,7 @@ Vibanalyz gives you:
 - Package SBOM 💣
 - Vulnerability Scan
 - Customized "Package Facts" PDF
+- The peace of mind that comes from running containers using Chainguard's hardened base images
 
 ![Package Facts Report Example](packagefacts.png)
 
@@ -255,5 +256,6 @@ See `vibanalyz_mvp_prompt.md` for detailed instructions.
 ## License
 
 See [LICENSE](LICENSE) for details.
+
 
 
